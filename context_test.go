@@ -59,3 +59,55 @@ func TestUUIDFromContext(t *testing.T) {
 		})
 	}
 }
+
+func TestContextWithObserver(t *testing.T) {
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		observer *Observer
+	}{
+		{
+			name:     "OK",
+			ctx:      context.Background(),
+			observer: &Observer{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := ContextWithObserver(tc.ctx, tc.observer)
+
+			observer := ctx.Value(observerContextKey)
+			assert.Equal(t, tc.observer, observer)
+		})
+	}
+}
+
+func TestFromContext(t *testing.T) {
+	observer := &Observer{}
+
+	tests := []struct {
+		name             string
+		ctx              context.Context
+		expectedObserver *Observer
+	}{
+		{
+			name:             "WithoutObserver",
+			ctx:              context.Background(),
+			expectedObserver: singleton,
+		},
+		{
+			name:             "WithObserver",
+			ctx:              context.WithValue(context.Background(), observerContextKey, observer),
+			expectedObserver: observer,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			observer := FromContext(tc.ctx)
+
+			assert.Equal(t, tc.expectedObserver, observer)
+		})
+	}
+}
