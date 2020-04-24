@@ -83,14 +83,16 @@ type Observer struct {
 }
 
 // New creates a new observer.
-func New(opts Options) *Observer {
+// If setAsSingleton set to true, the created observer will be set as the singleton observer too.
+// So, you can also access it using observer.Get() function.
+func New(setAsSingleton bool, opts Options) *Observer {
 	opts = opts.withDefaults()
 
 	logger, loggerConfig := newLogger(opts)
 	meter, meterClose, metricsHandler := newMeter(opts)
 	tracer, tracerClose := newTracer(opts)
 
-	return &Observer{
+	observer := &Observer{
 		Logger: logger,
 		Meter:  meter,
 		Tracer: tracer,
@@ -100,6 +102,12 @@ func New(opts Options) *Observer {
 		meterClose:     meterClose,
 		tracerClose:    tracerClose,
 	}
+
+	if setAsSingleton {
+		singleton = observer
+	}
+
+	return observer
 }
 
 func newLogger(opts Options) (*zap.Logger, *zap.Config) {
@@ -260,11 +268,6 @@ func init() {
 
 		loggerConfig: &zap.Config{},
 	}
-}
-
-// Init initializes the singleton Observer.
-func Init(opts Options) {
-	singleton = New(opts)
 }
 
 // Get returns the singleton Observer.

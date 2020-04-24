@@ -8,5 +8,5 @@ require (
 	go.opentelemetry.io/otel v0.4.2
 	go.opentelemetry.io/otel/exporters/metric/prometheus v0.4.2
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.4.2
-	go.uber.org/zap v1.14.1
+	go.uber.org/zap v1.15.0
 )

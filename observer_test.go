@@ -12,15 +12,18 @@ import (
 
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name string
-		opts Options
+		name           string
+		setAsSingleton bool
+		opts           Options
 	}{
 		{
-			name: "Default",
-			opts: Options{},
+			name:           "Default",
+			setAsSingleton: false,
+			opts:           Options{},
 		},
 		{
-			name: "Production",
+			name:           "Production",
+			setAsSingleton: true,
 			opts: Options{
 				Name:        "my-service",
 				Version:     "0.1.0",
@@ -37,7 +40,7 @@ func TestNew(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(T *testing.T) {
-			observer := New(tc.opts)
+			observer := New(tc.setAsSingleton, tc.opts)
 
 			assert.NotNil(t, observer)
 			assert.NotNil(t, observer.Logger)
@@ -407,47 +410,20 @@ func TestObserverServeHTTP(t *testing.T) {
 
 func TestSingleton(t *testing.T) {
 	tests := []struct {
-		name string
-		opts Options
+		name      string
+		singleton *Observer
 	}{
 		{
-			name: "Default",
-			opts: Options{},
-		},
-		{
-			name: "Production",
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
-					"domain": "auth",
-				},
-				LogLevel:            "warn",
-				JaegerAgentEndpoint: "localhost:6831",
-			},
+			name:      "OK",
+			singleton: &Observer{},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Run("Init", func(t *testing.T) {
-				Init(tc.opts)
+			singleton = tc.singleton
 
-				assert.NotNil(t, singleton)
-				assert.NotNil(t, singleton.Logger)
-				assert.NotNil(t, singleton.Meter)
-				assert.NotNil(t, singleton.Tracer)
-				assert.NotNil(t, singleton.loggerConfig)
-				assert.NotNil(t, singleton.metricsHandler)
-				assert.NotNil(t, singleton.meterClose)
-				assert.NotNil(t, singleton.tracerClose)
-			})
-
-			t.Run("Get", func(t *testing.T) {
-				assert.Equal(t, singleton, Get())
-			})
+			assert.Equal(t, tc.singleton, Get())
 		})
 	}
 }
