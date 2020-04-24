@@ -44,14 +44,184 @@ In other words, information captured by one trace does not tell anything about h
   <summary>Example</summary>
 
 ```go
+package main
+
+import (
+  "context"
+  "log"
+  "net/http"
+  "runtime"
+  "time"
+
+  "github.com/moorara/observer"
+  "go.opentelemetry.io/otel/api/core"
+  "go.opentelemetry.io/otel/api/correlation"
+  "go.opentelemetry.io/otel/api/key"
+  "go.opentelemetry.io/otel/api/metric"
+  "go.uber.org/zap"
+)
+
+type instruments struct {
+  reqCounter   metric.Int64Counter
+  reqDuration  metric.Float64Measure
+  allocatedMem metric.Int64Observer
+}
+
+func newInstruments(meter metric.Meter) *instruments {
+  mustMeter := metric.Must(meter)
+
+  callback := func(result metric.Int64ObserverResult) {
+    ms := new(runtime.MemStats)
+    runtime.ReadMemStats(ms)
+    result.Observe(int64(ms.Alloc),
+      key.String("function", "ReadMemStats"),
+    )
+  }
+
+  return &instruments{
+    reqCounter:   mustMeter.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
+    reqDuration:  mustMeter.NewFloat64Measure("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
+    allocatedMem: mustMeter.RegisterInt64Observer("allocated_memory_bytes", callback, metric.WithDescription("number of bytes allocated and in use")),
+  }
+}
+
+type server struct {
+  observer    *observer.Observer
+  instruments *instruments
+}
+
+func (s *server) Handle(ctx context.Context) {
+  // Tracing
+  ctx, span := s.observer.Tracer.Start(ctx, "handle-request")
+  defer span.End()
+
+  start := time.Now()
+  s.fetch(ctx)
+  s.respond(ctx)
+  duration := time.Now().Sub(start)
+
+  labels := []core.KeyValue{
+    key.String("method", "GET"),
+    key.String("endpoint", "/user"),
+    key.Uint("statusCode", 200),
+  }
+
+  // Metrics
+  s.observer.Meter.RecordBatch(ctx, labels,
+    s.instruments.reqCounter.Measurement(1),
+    s.instruments.reqDuration.Measurement(duration.Seconds()),
+  )
+
+  // Logging
+  s.observer.Logger.Info("request handled successfully.",
+    zap.String("method", "GET"),
+    zap.String("endpoint", "/user"),
+    zap.Uint("statusCode", 200),
+  )
+}
+
+func (s *server) fetch(ctx context.Context) {
+  _, span := s.observer.Tracer.Start(ctx, "read-database")
+  defer span.End()
+
+  time.Sleep(50 * time.Millisecond)
+}
+
+func (s *server) respond(ctx context.Context) {
+  _, span := s.observer.Tracer.Start(ctx, "send-response")
+  defer span.End()
+
+  time.Sleep(10 * time.Millisecond)
+}
+
+func main() {
+  // Creating a new Observer and set it as the singleton
+  obsv := observer.New(true, observer.Options{
+    Name:        "my-service",
+    Version:     "0.1.0",
+    Environment: "production",
+    Region:      "ca-central-1",
+    Tags: map[string]string{
+      "domain": "auth",
+    },
+    LogLevel:            "info",
+    JaegerAgentEndpoint: "localhost:6831",
+  })
+  defer obsv.Close()
+
+  srv := &server{
+    observer:    obsv,
+    instruments: newInstruments(obsv.Meter),
+  }
+
+  // Creating a correlation context
+  ctx := context.Background()
+  ctx = correlation.NewContext(ctx,
+    key.String("tenant", "1234"),
+  )
+
+  srv.Handle(ctx)
+
+  // Serving metrics endpoint
+  http.Handle("/metrics", obsv)
+  log.Fatal(http.ListenAndServe(":8080", nil))
+}
 ```
+
+Here are the logs from stdout:
 
 ```json
+{"level":"info","timestamp":"2020-04-24T02:23:36.390359-04:00","caller":"example/main.go:70","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
+And here are the metrics reported at http://localhost:8080/metrics:
+
 ```
+# HELP request_duration_seconds the duration of requests in seconds
+# TYPE request_duration_seconds summary
+request_duration_seconds{quantile="0.1"} 0.062591555
+request_duration_seconds{quantile="0.5"} 0.062591555
+request_duration_seconds{quantile="0.95"} 0.062591555
+request_duration_seconds{quantile="0.99"} 0.062591555
+request_duration_seconds_sum 0.062591555
+request_duration_seconds_count 1
+# HELP requests_total the total number of requests
+# TYPE requests_total counter
+requests_total 1
 ```
 </details>
+
+## OpenTelemetry
+
+### Logging
+
+### Metrics
+
+Metric instruments capture measurements. A Meter is used for creating metric instruments.
+
+Three kind of metric instruments:
+
+  - **Counter**:  metric events that _Add_ to a value that is summed over time.
+  - **Measure**:  metric events that _Record_ a value that is aggregated over time.
+  - **Observer**: metric events that _Observe_ a coherent set of values at a point in time.
+
+Counter and Measure instruments use synchronous APIs for capturing measurements driven by events in the application.
+These measurements are associated with a distributed context (_correlation context_).
+
+Observer instruments use an asynchronous API (callback) for collecting measurements on intervals.
+They are used to report measurements about the state of the application periodically.
+Observer instruments do not have a distributed context (_correlation context_) since they are reported outside of a context.
+
+Aggregation is the process of combining a large number of measurements into exact or estimated statistics.
+The type of aggregation is determined by the metric instrument implementation.
+
+  - Counter instruments use _Sum_ aggregation
+  - Measure instruments use _MinMaxSumCount_ aggregation
+  - Observer instruments use _LastValue_ aggregation.
+
+The Metric SDK specification allows configuring alternative aggregations for metric instruments.
+
+### Tracing
 
 ## Documentation
 
