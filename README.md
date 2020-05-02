@@ -92,7 +92,7 @@ type server struct {
 
 func (s *server) Handle(ctx context.Context) {
   // Tracing
-  ctx, span := s.observer.Tracer.Start(ctx, "handle-request")
+  ctx, span := s.observer.Tracer().Start(ctx, "handle-request")
   defer span.End()
 
   start := time.Now()
@@ -107,13 +107,13 @@ func (s *server) Handle(ctx context.Context) {
   }
 
   // Metrics
-  s.observer.Meter.RecordBatch(ctx, labels,
+  s.observer.Meter().RecordBatch(ctx, labels,
     s.instruments.reqCounter.Measurement(1),
     s.instruments.reqDuration.Measurement(duration.Seconds()),
   )
 
   // Logging
-  s.observer.Logger.Info("request handled successfully.",
+  s.observer.Logger().Info("request handled successfully.",
     zap.String("method", "GET"),
     zap.String("endpoint", "/user"),
     zap.Uint("statusCode", 200),
@@ -121,14 +121,14 @@ func (s *server) Handle(ctx context.Context) {
 }
 
 func (s *server) fetch(ctx context.Context) {
-  _, span := s.observer.Tracer.Start(ctx, "read-database")
+  _, span := s.observer.Tracer().Start(ctx, "read-database")
   defer span.End()
 
   time.Sleep(50 * time.Millisecond)
 }
 
 func (s *server) respond(ctx context.Context) {
-  _, span := s.observer.Tracer.Start(ctx, "send-response")
+  _, span := s.observer.Tracer().Start(ctx, "send-response")
   defer span.End()
 
   time.Sleep(10 * time.Millisecond)
@@ -151,7 +151,7 @@ func main() {
 
   srv := &server{
     observer:    obsv,
-    instruments: newInstruments(obsv.Meter),
+    instruments: newInstruments(obsv.Meter()),
   }
 
   // Creating a correlation context
@@ -171,23 +171,25 @@ func main() {
 Here are the logs from stdout:
 
 ```json
-{"level":"info","timestamp":"2020-04-24T02:23:36.390359-04:00","caller":"example/main.go:70","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-05-02T17:24:09.930771-04:00","caller":"example/main.go:70","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
 And here are the metrics reported at http://localhost:8080/metrics:
 
 ```
+# HELP allocated_memory_bytes number of bytes allocated and in use
+# TYPE allocated_memory_bytes histogram
+allocated_memory_bytes_bucket{function="ReadMemStats",le="+Inf"} 10
+allocated_memory_bytes_sum{function="ReadMemStats"} 2.6220712e+07
+allocated_memory_bytes_count{function="ReadMemStats"} 10
 # HELP request_duration_seconds the duration of requests in seconds
-# TYPE request_duration_seconds summary
-request_duration_seconds{quantile="0.1"} 0.062591555
-request_duration_seconds{quantile="0.5"} 0.062591555
-request_duration_seconds{quantile="0.95"} 0.062591555
-request_duration_seconds{quantile="0.99"} 0.062591555
-request_duration_seconds_sum 0.062591555
-request_duration_seconds_count 1
+# TYPE request_duration_seconds histogram
+request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.062990596
+request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter
-requests_total 1
+requests_total{endpoint="/user",method="GET",statusCode="200"} 1
 ```
 </details>
 

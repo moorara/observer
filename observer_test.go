@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -43,12 +45,12 @@ func TestNew(t *testing.T) {
 			observer := New(tc.setAsSingleton, tc.opts)
 
 			assert.NotNil(t, observer)
-			assert.NotNil(t, observer.Logger)
-			assert.NotNil(t, observer.Meter)
-			assert.NotNil(t, observer.Tracer)
+			assert.NotNil(t, observer.logger)
 			assert.NotNil(t, observer.loggerConfig)
+			assert.NotNil(t, observer.meter)
 			assert.NotNil(t, observer.metricsHandler)
 			assert.NotNil(t, observer.meterClose)
+			assert.NotNil(t, observer.tracer)
 			assert.NotNil(t, observer.tracerClose)
 		})
 	}
@@ -156,31 +158,17 @@ func TestNewMeter(t *testing.T) {
 				Name: "my-service",
 			},
 		},
-		{
-			name: "WithSummaryQuantiles",
-			opts: Options{
-				Name:             "my-service",
-				SummaryQuantiles: []float64{0.1, 0.5, 0.90, 0.95, 0.99},
-			},
-		},
-		{
-			name: "WithMetricBuckets",
-			opts: Options{
-				Name:             "my-service",
-				HistogramBuckets: []float64{0.01, 0.20, 0.50, 1.00, 5.00, 10.00},
-			},
-		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := tc.opts.withDefaults()
-			meter, close, handler := newMeter(opts)
+			meter, handler, close := newMeter(opts)
 			defer close()
 
 			assert.NotNil(t, meter)
-			assert.NotNil(t, close)
 			assert.NotNil(t, handler)
+			assert.NotNil(t, close)
 		})
 	}
 }
@@ -257,7 +245,7 @@ func TestObserverClose(t *testing.T) {
 		{
 			name: "Success",
 			observer: &Observer{
-				Logger:      zap.NewNop(),
+				logger:      zap.NewNop(),
 				meterClose:  func() {},
 				tracerClose: func() {},
 			},
@@ -270,6 +258,26 @@ func TestObserverClose(t *testing.T) {
 			err := tc.observer.Close()
 
 			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+
+func TestLogger(t *testing.T) {
+	tests := []struct {
+		name     string
+		observer *Observer
+	}{
+		{
+			name: "OK",
+			observer: &Observer{
+				logger: zap.NewNop(),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.observer.logger, tc.observer.Logger())
 		})
 	}
 }
@@ -321,6 +329,8 @@ func TestObserverSetLogLevel(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.observer.SetLogLevel(tc.level)
+
+			assert.Equal(t, tc.level, tc.observer.loggerConfig.Level.Level())
 		})
 	}
 }
@@ -374,6 +384,46 @@ func TestObserverGetLogLevel(t *testing.T) {
 			level := tc.observer.GetLogLevel()
 
 			assert.Equal(t, tc.expectedLevel, level)
+		})
+	}
+}
+
+func TestMeter(t *testing.T) {
+	tests := []struct {
+		name     string
+		observer *Observer
+	}{
+		{
+			name: "OK",
+			observer: &Observer{
+				meter: &metric.NoopMeter{},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.observer.meter, tc.observer.Meter())
+		})
+	}
+}
+
+func TestTracer(t *testing.T) {
+	tests := []struct {
+		name     string
+		observer *Observer
+	}{
+		{
+			name: "OK",
+			observer: &Observer{
+				tracer: &trace.NoopTracer{},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.observer.tracer, tc.observer.Tracer())
 		})
 	}
 }
