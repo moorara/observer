@@ -1,12 +1,16 @@
 package observer
 
-import "context"
+import (
+	"context"
+
+	"go.uber.org/zap"
+)
 
 type contextKey string
 
 const (
-	uuidContextKey     = contextKey("UUID")
-	observerContextKey = contextKey("Observer")
+	uuidContextKey   = contextKey("UUID")
+	loggerContextKey = contextKey("Logger")
 )
 
 // ContextWithUUID creates a new context with a uuid.
@@ -20,19 +24,19 @@ func UUIDFromContext(ctx context.Context) (string, bool) {
 	return uuid, ok
 }
 
-// ContextWithObserver returns a new context that holds a reference to an observer.
-func ContextWithObserver(ctx context.Context, observer *Observer) context.Context {
-	return context.WithValue(ctx, observerContextKey, observer)
+// ContextWithLogger returns a new context that holds a reference to a logger.
+func ContextWithLogger(ctx context.Context, logger *zap.Logger) context.Context {
+	return context.WithValue(ctx, loggerContextKey, logger)
 }
 
-// FromContext returns an observer set on a context.
-// If no observer found on the context, the singleton observer will be returned!
-func FromContext(ctx context.Context) *Observer {
-	val := ctx.Value(observerContextKey)
-	if observer, ok := val.(*Observer); ok {
-		return observer
+// LoggerFromContext returns a logger set on a context.
+// If no logger found on the context, the singleton logger will be returned!
+func LoggerFromContext(ctx context.Context) *zap.Logger {
+	val := ctx.Value(loggerContextKey)
+	if logger, ok := val.(*zap.Logger); ok {
+		return logger
 	}
 
-	// Return the singleton observer as the default
-	return singleton
+	// Return the singleton logger as the default
+	return singleton.logger
 }
