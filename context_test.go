@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func TestContextWithUUID(t *testing.T) {
@@ -60,54 +61,54 @@ func TestUUIDFromContext(t *testing.T) {
 	}
 }
 
-func TestContextWithObserver(t *testing.T) {
+func TestContextWithLogger(t *testing.T) {
 	tests := []struct {
-		name     string
-		ctx      context.Context
-		observer *Observer
+		name   string
+		ctx    context.Context
+		logger *zap.Logger
 	}{
 		{
-			name:     "OK",
-			ctx:      context.Background(),
-			observer: &Observer{},
+			name:   "OK",
+			ctx:    context.Background(),
+			logger: zap.NewNop(),
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := ContextWithObserver(tc.ctx, tc.observer)
+			ctx := ContextWithLogger(tc.ctx, tc.logger)
 
-			observer := ctx.Value(observerContextKey)
-			assert.Equal(t, tc.observer, observer)
+			logger := ctx.Value(loggerContextKey)
+			assert.Equal(t, tc.logger, logger)
 		})
 	}
 }
 
-func TestFromContext(t *testing.T) {
-	observer := &Observer{}
+func TestLoggerFromContext(t *testing.T) {
+	logger := zap.NewNop()
 
 	tests := []struct {
-		name             string
-		ctx              context.Context
-		expectedObserver *Observer
+		name           string
+		ctx            context.Context
+		expectedLogger *zap.Logger
 	}{
 		{
-			name:             "WithoutObserver",
-			ctx:              context.Background(),
-			expectedObserver: singleton,
+			name:           "WithoutObserver",
+			ctx:            context.Background(),
+			expectedLogger: singleton.logger,
 		},
 		{
-			name:             "WithObserver",
-			ctx:              context.WithValue(context.Background(), observerContextKey, observer),
-			expectedObserver: observer,
+			name:           "WithObserver",
+			ctx:            context.WithValue(context.Background(), loggerContextKey, logger),
+			expectedLogger: logger,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			observer := FromContext(tc.ctx)
+			logger := LoggerFromContext(tc.ctx)
 
-			assert.Equal(t, tc.expectedObserver, observer)
+			assert.Equal(t, tc.expectedLogger, logger)
 		})
 	}
 }
