@@ -197,33 +197,41 @@ requests_total{endpoint="/user",method="GET",statusCode="200"} 1
 
 ### Logging
 
+_TBD_
+
 ### Metrics
 
-Metric instruments capture measurements. A Meter is used for creating metric instruments.
+Metric _instruments capture measurements_ at runtime. A Meter is used for creating metric instruments.
 
-Three kind of metric instruments:
+There are two kinds of measurements:
 
-  - **Counter**:  metric events that _Add_ to a value that is summed over time.
-  - **Measure**:  metric events that _Record_ a value that is aggregated over time.
-  - **Observer**: metric events that _Observe_ a coherent set of values at a point in time.
+  - **Additive**: measurements for which only the sum is considered useful information
+  - **Non-Additive**: measurements for which the set of values (a.k.a. population or distribution) has useful information
 
-Counter and Measure instruments use synchronous APIs for capturing measurements driven by events in the application.
-These measurements are associated with a distributed context (_correlation context_).
+Non-additive instruments capture more information than additive instruments, but non-additive measurements are more expensive.
 
-Observer instruments use an asynchronous API (callback) for collecting measurements on intervals.
-They are used to report measurements about the state of the application periodically.
-Observer instruments do not have a distributed context (_correlation context_) since they are reported outside of a context.
+_Aggregation_ is the process of combining multiple measurements into exact or estimated statistics during an interval of time.
+Each instrument has a default aggregation. Other standard aggregations (histograms, quantile summaries, cardinality estimates, etc.) are also available.
 
-Aggregation is the process of combining a large number of measurements into exact or estimated statistics.
-The type of aggregation is determined by the metric instrument implementation.
+There are six kinds of metric instruments:
 
-  - Counter instruments use _Sum_ aggregation
-  - Measure instruments use _MinMaxSumCount_ aggregation
-  - Observer instruments use _LastValue_ aggregation.
+| Name              | Synchronous | Additive | Monotonic | Default Aggregation |
+|-------------------|-------------|----------|-----------|---------------------|
+| Counter           | Yes         | Yes      | Yes       | Sum                 |
+| UpDownCounter     | Yes         | Yes      | No        | Sum                 |
+| ValueRecorder     | Yes         | No       | No        | MinMaxSumCount      |
+| SumObserver       | No          | Yes      | Yes       | Sum                 |
+| UpDownSumObserver | No          | Yes      | No        | Sum                 |
+| ValueObserver     | No          | No       | No        | MinMaxSumCount      |
 
-The Metric SDK specification allows configuring alternative aggregations for metric instruments.
+The _synchronous_ instruments are useful for measurements that are gathered in a distributed Context.
+The _asynchronous_ instruments are useful when measurements are expensive, therefore should be gathered periodically.
+Synchronous instruments are used to capture changes in a sum, whereas asynchronous instruments are used to capture sums directly.
+Asynchronous (observer) instruments capture measurements about the state of the application periodically.
 
 ### Tracing
+
+_TBD_
 
 ## Documentation
 
@@ -231,7 +239,6 @@ The Metric SDK specification allows configuring alternative aggregations for met
     - [go.uber.org/zap](https://pkg.go.dev/go.uber.org/zap)
   - **Metrics**
     - [Metrics API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/metrics/api.md)
-    - [Metric User-Facing API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/metrics/api-user.md)
     - [go.opentelemetry.io/otel/api/metric](https://pkg.go.dev/go.opentelemetry.io/otel/api/metric)
   - **Tracing**
     - [Tracing API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md)
