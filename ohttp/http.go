@@ -1,14 +1,32 @@
+// Package ohttp is an observable http package.
+// It can be used for building HTTP servers and clients that automatically report logs, metrics, and traces.
 package ohttp
 
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 )
 
 const (
-	libraryName       = "observer"
+	libraryName       = "observer/ohttp"
 	requestUUIDHeader = "Request-UUID"
+	clientNameHeader  = "Client-Name"
 )
+
+// Options are optional configurations for creating middleware and clients.
+type Options struct {
+	LogInDebugLevel bool
+	IDRegexp        *regexp.Regexp
+}
+
+func (opts Options) withDefaults() Options {
+	if opts.IDRegexp == nil {
+		opts.IDRegexp = regexp.MustCompile("[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}")
+	}
+
+	return opts
+}
 
 // responseWriter extends the standard http.ResponseWriter.
 type responseWriter struct {

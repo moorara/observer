@@ -45,13 +45,13 @@ func TestNew(t *testing.T) {
 			observer := New(tc.setAsSingleton, tc.opts)
 
 			assert.NotNil(t, observer)
+			assert.Equal(t, tc.opts.Name, observer.name)
 			assert.NotNil(t, observer.logger)
 			assert.NotNil(t, observer.loggerConfig)
 			assert.NotNil(t, observer.meter)
-			assert.NotNil(t, observer.metricsHandler)
-			assert.NotNil(t, observer.meterClose)
+			assert.NotNil(t, observer.metricHandler)
 			assert.NotNil(t, observer.tracer)
-			assert.NotNil(t, observer.tracerClose)
+			assert.NotNil(t, observer.tracerFlush)
 		})
 	}
 }
@@ -163,12 +163,10 @@ func TestNewMeter(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := tc.opts.withDefaults()
-			meter, handler, close := newMeter(opts)
-			defer close()
+			meter, handler := newMeter(opts)
 
 			assert.NotNil(t, meter)
 			assert.NotNil(t, handler)
-			assert.NotNil(t, close)
 		})
 	}
 }
@@ -227,11 +225,11 @@ func TestNewTracer(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := tc.opts.withDefaults()
-			tracer, close := newTracer(opts)
-			defer close()
+			tracer, flush := newTracer(opts)
+			defer flush()
 
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, close)
+			assert.NotNil(t, flush)
 		})
 	}
 }
@@ -246,8 +244,7 @@ func TestObserverClose(t *testing.T) {
 			name: "Success",
 			observer: &Observer{
 				logger:      zap.NewNop(),
-				meterClose:  func() {},
-				tracerClose: func() {},
+				tracerFlush: func() {},
 			},
 			expectedError: nil,
 		},
@@ -262,7 +259,27 @@ func TestObserverClose(t *testing.T) {
 	}
 }
 
-func TestLogger(t *testing.T) {
+func TestObserverName(t *testing.T) {
+	tests := []struct {
+		name     string
+		observer *Observer
+	}{
+		{
+			name: "OK",
+			observer: &Observer{
+				name: "my-service",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.observer.name, tc.observer.Name())
+		})
+	}
+}
+
+func TestObserverLogger(t *testing.T) {
 	tests := []struct {
 		name     string
 		observer *Observer
@@ -388,7 +405,7 @@ func TestObserverGetLogLevel(t *testing.T) {
 	}
 }
 
-func TestMeter(t *testing.T) {
+func TestObserverMeter(t *testing.T) {
 	tests := []struct {
 		name     string
 		observer *Observer
@@ -396,7 +413,7 @@ func TestMeter(t *testing.T) {
 		{
 			name: "OK",
 			observer: &Observer{
-				meter: &metric.NoopMeter{},
+				meter: new(metric.NoopProvider).Meter("Noop"),
 			},
 		},
 	}
@@ -408,7 +425,7 @@ func TestMeter(t *testing.T) {
 	}
 }
 
-func TestTracer(t *testing.T) {
+func TestObserverTracer(t *testing.T) {
 	tests := []struct {
 		name     string
 		observer *Observer
@@ -438,7 +455,7 @@ func TestObserverServeHTTP(t *testing.T) {
 		{
 			name: "OK",
 			observer: &Observer{
-				metricsHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				metricHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 				}),
 			},

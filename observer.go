@@ -8,26 +8,21 @@ package observer
 import (
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"go.opentelemetry.io/otel/api/core"
 	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/key"
+	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
 
+	"go.opentelemetry.io/otel/sdk/metric/controller/pull"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 
 	promexporter "go.opentelemetry.io/otel/exporters/metric/prometheus"
 	jaegerexporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
-)
-
-const (
-	defaultMetricInterval = 5 * time.Second
 )
 
 // Options are optional configurations for creating an observer (logging, metrics, and tracing).
@@ -60,13 +55,13 @@ func (opts Options) withDefaults() Options {
 
 // Observer provides a logger, a meter, and a tracer for observability capabilities.
 type Observer struct {
-	logger         *zap.Logger
-	loggerConfig   *zap.Config
-	meter          metric.Meter
-	metricsHandler http.Handler
-	meterClose     func()
-	tracer         trace.Tracer
-	tracerClose    func()
+	name          string
+	logger        *zap.Logger
+	loggerConfig  *zap.Config
+	meter         metric.Meter
+	metricHandler http.Handler
+	tracer        trace.Tracer
+	tracerFlush   func()
 }
 
 // New creates a new observer.
@@ -76,17 +71,17 @@ func New(setAsSingleton bool, opts Options) *Observer {
 	opts = opts.withDefaults()
 
 	logger, loggerConfig := newLogger(opts)
-	meter, metricsHandler, meterClose := newMeter(opts)
-	tracer, tracerClose := newTracer(opts)
+	meter, metricHandler := newMeter(opts)
+	tracer, tracerFlush := newTracer(opts)
 
 	observer := &Observer{
-		logger:         logger,
-		loggerConfig:   loggerConfig,
-		meter:          meter,
-		metricsHandler: metricsHandler,
-		meterClose:     meterClose,
-		tracer:         tracer,
-		tracerClose:    tracerClose,
+		name:          opts.Name,
+		logger:        logger,
+		loggerConfig:  loggerConfig,
+		meter:         meter,
+		metricHandler: metricHandler,
+		tracer:        tracer,
+		tracerFlush:   tracerFlush,
 	}
 
 	if setAsSingleton {
@@ -151,7 +146,7 @@ func newLogger(opts Options) (*zap.Logger, *zap.Config) {
 	return logger, &config
 }
 
-func newMeter(opts Options) (metric.Meter, http.HandlerFunc, func()) {
+func newMeter(opts Options) (metric.Meter, http.Handler) {
 	// Create a new Prometheus registry
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(prometheus.NewGoCollector())
@@ -160,17 +155,21 @@ func newMeter(opts Options) (metric.Meter, http.HandlerFunc, func()) {
 	config := promexporter.Config{
 		Registerer: registry,
 		Gatherer:   registry,
+		// DefaultSummaryQuantiles:    []float64{},
+		// DefaultHistogramBoundaries: []float64{},
 	}
 
-	controller, handlerFunc, err := promexporter.NewExportPipeline(config, defaultMetricInterval)
+	pullOpts := []pull.Option{}
+
+	exporter, err := promexporter.NewExportPipeline(config, pullOpts...)
 	if err != nil {
 		panic(err)
 	}
 
-	global.SetMeterProvider(controller)
-	meter := global.MeterProvider().Meter(opts.Name)
+	global.SetMeterProvider(exporter.Provider())
+	meter := exporter.Provider().Meter(opts.Name)
 
-	return meter, handlerFunc, controller.Stop
+	return meter, exporter
 }
 
 func newTracer(opts Options) (trace.Tracer, func()) {
@@ -186,9 +185,9 @@ func newTracer(opts Options) (trace.Tracer, func()) {
 		)
 	}
 
-	tags := []core.KeyValue{}
+	tags := []kv.KeyValue{}
 	for k, v := range opts.Tags {
-		tags = append(tags, key.String(k, v))
+		tags = append(tags, kv.String(k, v))
 	}
 
 	processOpt := jaegerexporter.WithProcess(
@@ -204,7 +203,7 @@ func newTracer(opts Options) (trace.Tracer, func()) {
 		},
 	)
 
-	provider, close, err := jaegerexporter.NewExportPipeline(endpointOpt, processOpt, sdkOpt)
+	provider, flush, err := jaegerexporter.NewExportPipeline(endpointOpt, processOpt, sdkOpt)
 	if err != nil {
 		panic(err)
 	}
@@ -212,15 +211,19 @@ func newTracer(opts Options) (trace.Tracer, func()) {
 	global.SetTraceProvider(provider)
 	tracer := global.TraceProvider().Tracer(opts.Name)
 
-	return tracer, close
+	return tracer, flush
 }
 
 // Close implements io.Closer interface.
 // It flushes the logger, meter, and tracer.
 func (o *Observer) Close() error {
-	o.meterClose()
-	o.tracerClose()
+	o.tracerFlush()
 	return o.logger.Sync()
+}
+
+// Name is returns the name of the observer.
+func (o *Observer) Name() string {
+	return o.name
 }
 
 // Logger is used for accessing the logger.
@@ -251,7 +254,7 @@ func (o *Observer) Tracer() trace.Tracer {
 // ServeHTTP implements http.Handler interface.
 // It serves the metrics endpoint for Prometheus metrics.
 func (o *Observer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	o.metricsHandler.ServeHTTP(w, r)
+	o.metricHandler.ServeHTTP(w, r)
 }
 
 // The singleton observer.
@@ -260,11 +263,14 @@ var singleton *Observer
 // Initialize the singleton observer with a no-op observer.
 // init function will be only called once in runtime regardless of how many times the package is imported.
 func init() {
+	mp := metric.NoopProvider{}
+	tp := trace.NoopProvider{}
+
 	singleton = &Observer{
 		logger:       zap.NewNop(),
 		loggerConfig: &zap.Config{},
-		meter:        &metric.NoopMeter{},
-		tracer:       &trace.NoopTracer{},
+		meter:        mp.Meter("Noop"),
+		tracer:       tp.Tracer("Noop"),
 	}
 }
 
