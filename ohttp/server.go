@@ -7,9 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/core"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/key"
+	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
@@ -17,31 +16,32 @@ import (
 	"go.uber.org/zap"
 )
 
-// MiddlewareOptions are optional configurations for creating a server middleware.
-type MiddlewareOptions struct {
-	// Whether or not to log successful requests at debug level (the default is at info level).
-	LogAtDebugLevel bool
-}
-
 // Server-side instruments for metrics.
 type serverInstruments struct {
 	reqCounter  metric.Int64Counter
-	reqDuration metric.Int64Measure
+	reqGauge    metric.Int64UpDownCounter
+	reqDuration metric.Int64ValueRecorder
 }
 
 func newServerInstruments(meter metric.Meter) *serverInstruments {
-	mustMeter := metric.Must(meter)
+	mm := metric.Must(meter)
 
 	return &serverInstruments{
-		reqCounter: mustMeter.NewInt64Counter(
+		reqCounter: mm.NewInt64Counter(
 			"incoming_http_requests_total",
-			metric.WithDescription("The total number of incoming requests (server-side)"),
+			metric.WithDescription("The total number of incoming http requests (server-side)"),
 			metric.WithUnit(unit.Dimensionless),
 			metric.WithLibraryName(libraryName),
 		),
-		reqDuration: mustMeter.NewInt64Measure(
+		reqGauge: mm.NewInt64UpDownCounter(
+			"incoming_http_requests_active",
+			metric.WithDescription("The number of in-flight incoming http requests (server-side)"),
+			metric.WithUnit(unit.Dimensionless),
+			metric.WithLibraryName(libraryName),
+		),
+		reqDuration: mm.NewInt64ValueRecorder(
 			"incoming_http_requests_duration",
-			metric.WithDescription("The duration of incoming requests in milliseconds (server-side)"),
+			metric.WithDescription("The duration of incoming http requests in milliseconds (server-side)"),
 			metric.WithUnit(unit.Milliseconds),
 			metric.WithLibraryName(libraryName),
 		),
@@ -50,13 +50,14 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 
 // Middleware creates observable http handlers with logging, metrics, and tracing.
 type Middleware struct {
-	opts        MiddlewareOptions
+	opts        Options
 	observer    *observer.Observer
 	instruments *serverInstruments
 }
 
-// NewMiddleware creates a new observable http middleware
-func NewMiddleware(observer *observer.Observer, opts MiddlewareOptions) *Middleware {
+// NewMiddleware creates a new http middleware for observability.
+func NewMiddleware(observer *observer.Observer, opts Options) *Middleware {
+	opts = opts.withDefaults()
 	instruments := newServerInstruments(observer.Meter())
 
 	return &Middleware{
@@ -66,17 +67,23 @@ func NewMiddleware(observer *observer.Observer, opts MiddlewareOptions) *Middlew
 	}
 }
 
-// GetHandlerFunc wraps an existing http handler function and returns a new observable handler function.
+// WrapHandlerFunc wraps an existing http handler function and returns a new observable handler function.
 // This can be used for making http handlers observable via logging, metrics, tracing, etc.
-func (m *Middleware) GetHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
+func (m *Middleware) WrapHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 
+		ctx := r.Context()
 		kind := "server"
-		protocol := r.Proto
 		method := r.Method
 		url := r.URL.Path
-		ctx := r.Context()
+		route := m.opts.IDRegexp.ReplaceAllString(url, ":id")
+
+		// Increase the number of in-flight requests
+		m.instruments.reqGauge.Add(ctx, 1,
+			kv.String("method", method),
+			kv.String("route", route),
+		)
 
 		// Make sure the request has a UUID
 		requestUUID := r.Header.Get(requestUUIDHeader)
@@ -85,32 +92,39 @@ func (m *Middleware) GetHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 			r.Header.Set(requestUUIDHeader, requestUUID)
 		}
 
+		// Get the name of client for the request if any
+		clientName := r.Header.Get(clientNameHeader)
+
 		// Extract correlation context entries and parent span context if any
 		// The first return value is a list of http attributes for the request
 		_, entries, spanContext := httptrace.Extract(ctx, r)
 
 		// Create a new correlation context with the extracted entries and new ones
 		entries = append(entries,
-			key.String("req.uuid", requestUUID),
+			kv.String("req.uuid", requestUUID),
 		)
 		ctx = correlation.NewContext(ctx, entries...)
 
 		// Start a new span
 		ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
 		ctx, span := m.observer.Tracer().Start(ctx,
-			"server-request",
+			"http-server-request",
 			trace.WithSpanKind(trace.SpanKindServer),
 		)
 		defer span.End()
 
 		// Create a contextualized logger
-		logger := m.observer.Logger().With(
+		contextFields := []zap.Field{
 			zap.String("req.uuid", requestUUID),
 			zap.String("req.kind", kind),
-			zap.String("req.protocol", protocol),
 			zap.String("req.method", method),
 			zap.String("req.url", url),
-		)
+			zap.String("req.route", route),
+		}
+		if clientName != "" {
+			contextFields = append(contextFields, zap.String("client.name", clientName))
+		}
+		logger := m.observer.Logger().With(contextFields...)
 
 		// Augment the request context
 		ctx = observer.ContextWithUUID(ctx, requestUUID)
@@ -121,6 +135,7 @@ func (m *Middleware) GetHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 		rw := newResponseWriter(w)
 
 		// Call the next http handler function
+		span.AddEvent(ctx, "calling http handler")
 		next(rw, req)
 
 		duration := time.Since(startTime).Milliseconds()
@@ -129,12 +144,11 @@ func (m *Middleware) GetHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 
 		// Report metrics
 		m.observer.Meter().RecordBatch(ctx,
-			[]core.KeyValue{
-				key.String("protocol", protocol),
-				key.String("method", method),
-				key.String("url", url),
-				key.Int("status_code", statusCode),
-				key.String("status_class", statusClass),
+			[]kv.KeyValue{
+				kv.String("method", method),
+				kv.String("route", route),
+				kv.Int("status_code", statusCode),
+				kv.String("status_class", statusClass),
 			},
 			m.instruments.reqCounter.Measurement(1),
 			m.instruments.reqDuration.Measurement(duration),
@@ -157,19 +171,25 @@ func (m *Middleware) GetHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 		case statusCode >= 100:
 			fallthrough
 		default:
-			if m.opts.LogAtDebugLevel {
+			if m.opts.LogInDebugLevel {
 				logger.Debug(message, fields...)
 			} else {
 				logger.Info(message, fields...)
 			}
 		}
 
+		// Decrease the number of in-flight requests
+		m.instruments.reqGauge.Add(ctx, -1,
+			kv.String("method", method),
+			kv.String("route", route),
+		)
+
 		// Report the span
 		span.SetAttributes(
-			key.String("protocol", protocol),
-			key.String("method", method),
-			key.String("url", url),
-			key.Int("status_code", statusCode),
+			kv.String("method", method),
+			kv.String("url", url),
+			kv.String("route", route),
+			kv.Int("status_code", statusCode),
 		)
 	}
 }
