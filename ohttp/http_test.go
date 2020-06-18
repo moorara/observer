@@ -6,7 +6,62 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/trace"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
+
+type mockObserver struct {
+	name   string
+	logger *zap.Logger
+	meter  metric.Meter
+	tracer trace.Tracer
+}
+
+func newMockObserver() *mockObserver {
+	mp := metric.NoopProvider{}
+	tp := trace.NoopProvider{}
+
+	return &mockObserver{
+		name:   "test",
+		logger: zap.NewNop(),
+		meter:  mp.Meter("Noop"),
+		tracer: tp.Tracer("Noop"),
+	}
+}
+
+func (m *mockObserver) Close() error {
+	return nil
+}
+
+func (m *mockObserver) Name() string {
+	return m.name
+}
+
+func (m *mockObserver) Logger() *zap.Logger {
+	return m.logger
+}
+
+func (m *mockObserver) SetLogLevel(level zapcore.Level) {
+	// Noop
+}
+
+func (m *mockObserver) GetLogLevel() zapcore.Level {
+	return zapcore.Level(99)
+}
+
+func (m *mockObserver) Meter() metric.Meter {
+	return m.meter
+}
+
+func (m *mockObserver) Tracer() trace.Tracer {
+	return m.tracer
+}
+
+func (m *mockObserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Noop
+}
 
 func TestResponseWriter(t *testing.T) {
 	tests := []struct {

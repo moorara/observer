@@ -56,12 +56,12 @@ func newClientInstruments(meter metric.Meter) *clientInstruments {
 type Client struct {
 	opts        Options
 	client      *http.Client
-	observer    *observer.Observer
+	observer    observer.Observer
 	instruments *clientInstruments
 }
 
 // NewClient creates a new observable http client.
-func NewClient(client *http.Client, observer *observer.Observer, opts Options) *Client {
+func NewClient(client *http.Client, observer observer.Observer, opts Options) *Client {
 	opts = opts.withDefaults()
 	instruments := newClientInstruments(observer.Meter())
 
@@ -122,7 +122,6 @@ func (c *Client) Post(url, contentType string, body io.Reader) (resp *http.Respo
 func (c *Client) PostForm(url string, data url.Values) (resp *http.Response, err error) {
 	contentType := "application/x-www-form-urlencoded"
 	body := strings.NewReader(data.Encode())
-
 	return c.Post(url, contentType, body)
 }
 
@@ -178,10 +177,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	var statusCode int
 	var statusClass string
 
-	if err != nil {
-		statusCode = -1
-		statusClass = ""
-	} else {
+	if err == nil {
 		statusCode = resp.StatusCode
 		statusClass = fmt.Sprintf("%dxx", statusCode/100)
 	}
