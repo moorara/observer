@@ -9,7 +9,7 @@ Here is a snippet of what you need to do on server-side:
 
 ```go
 obsv := observer.New(true, observer.Options{
-  Name:     "client",
+  Name:     "server",
   LogLevel: "info",
 })
 defer obsv.Close()
