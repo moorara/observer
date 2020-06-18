@@ -54,12 +54,12 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 // ServerInterceptor creates interceptors with logging, metrics, and tracing for grpc servers.
 type ServerInterceptor struct {
 	opts        Options
-	observer    *observer.Observer
+	observer    observer.Observer
 	instruments *serverInstruments
 }
 
 // NewServerInterceptor creates a new server interceptor for observability.
-func NewServerInterceptor(observer *observer.Observer, opts Options) *ServerInterceptor {
+func NewServerInterceptor(observer observer.Observer, opts Options) *ServerInterceptor {
 	opts = opts.withDefaults()
 	instruments := newServerInstruments(observer.Meter())
 
@@ -105,9 +105,13 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 		kv.Bool("stream", stream),
 	)
 
-	// Get grpc request metadata (an incoming grpc request context is guaranteed to have metadata)
-	md, _ := metadata.FromIncomingContext(ctx)
-	md = md.Copy()
+	// Get grpc request metadata
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		md = md.Copy()
+	} else {
+		md = metadata.New(nil)
+	}
 
 	// Make sure the request has a UUID
 	var requestUUID string
@@ -161,7 +165,7 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 	ctx = observer.ContextWithUUID(ctx, requestUUID)
 	ctx = observer.ContextWithLogger(ctx, logger)
 
-	// Call the gRPC method handler
+	// Call gRPC method handler
 	span.AddEvent(ctx, "calling grpc method handler")
 	res, err := handler(ctx, req)
 
@@ -310,7 +314,7 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	ctx = observer.ContextWithLogger(ctx, logger)
 	ss = ServerStreamWithContext(ctx, ss)
 
-	// Call the gRPC method handler
+	// Call gRPC method handler
 	span.AddEvent(ctx, "calling grpc method handler")
 	err := handler(srv, ss)
 
