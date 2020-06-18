@@ -54,39 +54,38 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/core"
   "go.opentelemetry.io/otel/api/correlation"
-  "go.opentelemetry.io/otel/api/key"
+  "go.opentelemetry.io/otel/api/kv"
   "go.opentelemetry.io/otel/api/metric"
   "go.uber.org/zap"
 )
 
 type instruments struct {
   reqCounter   metric.Int64Counter
-  reqDuration  metric.Float64Measure
-  allocatedMem metric.Int64Observer
+  reqDuration  metric.Float64ValueRecorder
+  allocatedMem metric.Int64ValueObserver
 }
 
 func newInstruments(meter metric.Meter) *instruments {
-  mustMeter := metric.Must(meter)
+  mm := metric.Must(meter)
 
-  callback := func(result metric.Int64ObserverResult) {
+  callback := func(ctx context.Context, result metric.Int64ObserverResult) {
     ms := new(runtime.MemStats)
     runtime.ReadMemStats(ms)
     result.Observe(int64(ms.Alloc),
-      key.String("function", "ReadMemStats"),
+      kv.String("function", "ReadMemStats"),
     )
   }
 
   return &instruments{
-    reqCounter:   mustMeter.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
-    reqDuration:  mustMeter.NewFloat64Measure("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
-    allocatedMem: mustMeter.RegisterInt64Observer("allocated_memory_bytes", callback, metric.WithDescription("number of bytes allocated and in use")),
+    reqCounter:   mm.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
+    reqDuration:  mm.NewFloat64ValueRecorder("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
+    allocatedMem: mm.NewInt64ValueObserver("allocated_memory_bytes", callback, metric.WithDescription("number of bytes allocated and in use")),
   }
 }
 
 type server struct {
-  observer    *observer.Observer
+  observer    observer.Observer
   instruments *instruments
 }
 
@@ -100,10 +99,10 @@ func (s *server) Handle(ctx context.Context) {
   s.respond(ctx)
   duration := time.Now().Sub(start)
 
-  labels := []core.KeyValue{
-    key.String("method", "GET"),
-    key.String("endpoint", "/user"),
-    key.Uint("statusCode", 200),
+  labels := []kv.KeyValue{
+    kv.String("method", "GET"),
+    kv.String("endpoint", "/user"),
+    kv.Uint("statusCode", 200),
   }
 
   // Metrics
@@ -157,7 +156,7 @@ func main() {
   // Creating a correlation context
   ctx := context.Background()
   ctx = correlation.NewContext(ctx,
-    key.String("tenant", "1234"),
+    kv.String("tenant", "1234"),
   )
 
   srv.Handle(ctx)
@@ -171,7 +170,7 @@ func main() {
 Here are the logs from stdout:
 
 ```json
-{"level":"info","timestamp":"2020-05-02T17:24:09.930771-04:00","caller":"example/main.go:70","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-06-18T14:15:05.006557-04:00","caller":"example/main.go:69","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
 And here are the metrics reported at http://localhost:8080/metrics:
@@ -179,13 +178,13 @@ And here are the metrics reported at http://localhost:8080/metrics:
 ```
 # HELP allocated_memory_bytes number of bytes allocated and in use
 # TYPE allocated_memory_bytes histogram
-allocated_memory_bytes_bucket{function="ReadMemStats",le="+Inf"} 10
-allocated_memory_bytes_sum{function="ReadMemStats"} 2.6220712e+07
-allocated_memory_bytes_count{function="ReadMemStats"} 10
+allocated_memory_bytes_bucket{function="ReadMemStats",le="+Inf"} 2
+allocated_memory_bytes_sum{function="ReadMemStats"} 2.454424e+06
+allocated_memory_bytes_count{function="ReadMemStats"} 2
 # HELP request_duration_seconds the duration of requests in seconds
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
-request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.062990596
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.065625226
 request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter
