@@ -1,5 +1,38 @@
 # Changelog
 
+## [v0.2.0](https://github.com/moorara/observer/tree/v0.2.0) (2020-06-18)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.1.0...v0.2.0)
+
+**Implemented enhancements:**
+
+- ohttp: report canonical url paths when reporting metrics [\#17](https://github.com/moorara/observer/issues/17)
+
+**Fixed bugs:**
+
+- Prometheus histogram metrics cannot be created [\#9](https://github.com/moorara/observer/issues/9)
+- Prometheus metrics do not have labels [\#8](https://github.com/moorara/observer/issues/8)
+
+**Closed issues:**
+
+- Finish ogrpc package [\#27](https://github.com/moorara/observer/issues/27)
+- Finish ohttp package [\#20](https://github.com/moorara/observer/issues/20)
+- Add a request gauge instrument [\#16](https://github.com/moorara/observer/issues/16)
+
+**Merged pull requests:**
+
+- Add examples [\#31](https://github.com/moorara/observer/pull/31) ([moorara](https://github.com/moorara))
+- add traceId and spanId to context logger [\#30](https://github.com/moorara/observer/pull/30) ([moorara](https://github.com/moorara))
+- Add unit tests [\#29](https://github.com/moorara/observer/pull/29) ([moorara](https://github.com/moorara))
+- Add grpc [\#26](https://github.com/moorara/observer/pull/26) ([moorara](https://github.com/moorara))
+- Update module stretchr/testify to v1.6.1 [\#25](https://github.com/moorara/observer/pull/25) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module stretchr/testify to v1.6.0 [\#24](https://github.com/moorara/observer/pull/24) ([renovate[bot]](https://github.com/apps/renovate))
+- Update feature\_request.md [\#22](https://github.com/moorara/observer/pull/22) ([moorara](https://github.com/moorara))
+- Add ohttp sub-package [\#19](https://github.com/moorara/observer/pull/19) ([moorara](https://github.com/moorara))
+- Change Context API [\#15](https://github.com/moorara/observer/pull/15) ([moorara](https://github.com/moorara))
+- Remove summary quantiles and histogram options from options [\#14](https://github.com/moorara/observer/pull/14) ([moorara](https://github.com/moorara))
+- Update module prometheus/client\_golang to v1.6.0 [\#13](https://github.com/moorara/observer/pull/13) ([renovate[bot]](https://github.com/apps/renovate))
+
 ## [v0.1.0](https://github.com/moorara/observer/tree/v0.1.0) (2020-04-24)
 
 [Full Changelog](https://github.com/moorara/observer/compare/b854e571647301ebf995530765781fe0ea555904...v0.1.0)
