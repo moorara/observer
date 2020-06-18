@@ -45,13 +45,10 @@ func TestNew(t *testing.T) {
 			observer := New(tc.setAsSingleton, tc.opts)
 
 			assert.NotNil(t, observer)
-			assert.Equal(t, tc.opts.Name, observer.name)
-			assert.NotNil(t, observer.logger)
-			assert.NotNil(t, observer.loggerConfig)
-			assert.NotNil(t, observer.meter)
-			assert.NotNil(t, observer.metricHandler)
-			assert.NotNil(t, observer.tracer)
-			assert.NotNil(t, observer.tracerFlush)
+			assert.Equal(t, tc.opts.Name, observer.Name())
+			assert.NotNil(t, observer.Logger())
+			assert.NotNil(t, observer.Meter())
+			assert.NotNil(t, observer.Tracer())
 		})
 	}
 }
@@ -237,12 +234,12 @@ func TestNewTracer(t *testing.T) {
 func TestObserverClose(t *testing.T) {
 	tests := []struct {
 		name          string
-		observer      *Observer
+		observer      *observer
 		expectedError error
 	}{
 		{
 			name: "Success",
-			observer: &Observer{
+			observer: &observer{
 				logger:      zap.NewNop(),
 				tracerFlush: func() {},
 			},
@@ -262,11 +259,11 @@ func TestObserverClose(t *testing.T) {
 func TestObserverName(t *testing.T) {
 	tests := []struct {
 		name     string
-		observer *Observer
+		observer *observer
 	}{
 		{
 			name: "OK",
-			observer: &Observer{
+			observer: &observer{
 				name: "my-service",
 			},
 		},
@@ -282,11 +279,11 @@ func TestObserverName(t *testing.T) {
 func TestObserverLogger(t *testing.T) {
 	tests := []struct {
 		name     string
-		observer *Observer
+		observer *observer
 	}{
 		{
 			name: "OK",
-			observer: &Observer{
+			observer: &observer{
 				logger: zap.NewNop(),
 			},
 		},
@@ -302,12 +299,12 @@ func TestObserverLogger(t *testing.T) {
 func TestObserverSetLogLevel(t *testing.T) {
 	tests := []struct {
 		name     string
-		observer *Observer
+		observer *observer
 		level    zapcore.Level
 	}{
 		{
 			name: "Debug",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevel(),
 				},
@@ -316,7 +313,7 @@ func TestObserverSetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Info",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevel(),
 				},
@@ -325,7 +322,7 @@ func TestObserverSetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Warn",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevel(),
 				},
@@ -334,7 +331,7 @@ func TestObserverSetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Error",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevel(),
 				},
@@ -355,12 +352,12 @@ func TestObserverSetLogLevel(t *testing.T) {
 func TestObserverGetLogLevel(t *testing.T) {
 	tests := []struct {
 		name          string
-		observer      *Observer
+		observer      *observer
 		expectedLevel zapcore.Level
 	}{
 		{
 			name: "Debug",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevelAt(zapcore.DebugLevel),
 				},
@@ -369,7 +366,7 @@ func TestObserverGetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Info",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevelAt(zapcore.InfoLevel),
 				},
@@ -378,7 +375,7 @@ func TestObserverGetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Warn",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevelAt(zapcore.WarnLevel),
 				},
@@ -387,7 +384,7 @@ func TestObserverGetLogLevel(t *testing.T) {
 		},
 		{
 			name: "Error",
-			observer: &Observer{
+			observer: &observer{
 				loggerConfig: &zap.Config{
 					Level: zap.NewAtomicLevelAt(zapcore.ErrorLevel),
 				},
@@ -408,11 +405,11 @@ func TestObserverGetLogLevel(t *testing.T) {
 func TestObserverMeter(t *testing.T) {
 	tests := []struct {
 		name     string
-		observer *Observer
+		observer *observer
 	}{
 		{
 			name: "OK",
-			observer: &Observer{
+			observer: &observer{
 				meter: new(metric.NoopProvider).Meter("Noop"),
 			},
 		},
@@ -428,11 +425,11 @@ func TestObserverMeter(t *testing.T) {
 func TestObserverTracer(t *testing.T) {
 	tests := []struct {
 		name     string
-		observer *Observer
+		observer *observer
 	}{
 		{
 			name: "OK",
-			observer: &Observer{
+			observer: &observer{
 				tracer: &trace.NoopTracer{},
 			},
 		},
@@ -448,13 +445,13 @@ func TestObserverTracer(t *testing.T) {
 func TestObserverServeHTTP(t *testing.T) {
 	tests := []struct {
 		name               string
-		observer           *Observer
+		observer           *observer
 		req                *http.Request
 		expectedStatusCode int
 	}{
 		{
 			name: "OK",
-			observer: &Observer{
+			observer: &observer{
 				metricHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 				}),
@@ -478,11 +475,11 @@ func TestObserverServeHTTP(t *testing.T) {
 func TestSingleton(t *testing.T) {
 	tests := []struct {
 		name      string
-		singleton *Observer
+		singleton *observer
 	}{
 		{
 			name:      "OK",
-			singleton: &Observer{},
+			singleton: &observer{},
 		},
 	}
 

@@ -51,12 +51,12 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 // Middleware creates observable http handlers with logging, metrics, and tracing.
 type Middleware struct {
 	opts        Options
-	observer    *observer.Observer
+	observer    observer.Observer
 	instruments *serverInstruments
 }
 
 // NewMiddleware creates a new http middleware for observability.
-func NewMiddleware(observer *observer.Observer, opts Options) *Middleware {
+func NewMiddleware(observer observer.Observer, opts Options) *Middleware {
 	opts = opts.withDefaults()
 	instruments := newServerInstruments(observer.Meter())
 
@@ -67,9 +67,9 @@ func NewMiddleware(observer *observer.Observer, opts Options) *Middleware {
 	}
 }
 
-// WrapHandlerFunc wraps an existing http handler function and returns a new observable handler function.
+// Wrap wraps an existing http handler function and returns a new observable handler function.
 // This can be used for making http handlers observable via logging, metrics, tracing, etc.
-func (m *Middleware) WrapHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
+func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 
@@ -134,7 +134,7 @@ func (m *Middleware) WrapHandlerFunc(next http.HandlerFunc) http.HandlerFunc {
 		// Create a wrapped response writer, so we can know about the response
 		rw := newResponseWriter(w)
 
-		// Call the next http handler function
+		// Call http handler
 		span.AddEvent(ctx, "calling http handler")
 		next(rw, req)
 

@@ -53,7 +53,11 @@ func parseEndpoint(fullMethod string) (endpoint, bool) {
 
 // String implements the fmt.Stringer interface.
 func (e endpoint) String() string {
-	return fmt.Sprintf("%s::%s::%s", e.Package, e.Service, e.Method)
+	var s string
+	if e.Package != "" && e.Service != "" && e.Method != "" {
+		s = fmt.Sprintf("%s::%s::%s", e.Package, e.Service, e.Method)
+	}
+	return s
 }
 
 type serverStream struct {

@@ -54,12 +54,12 @@ func newClientInstruments(meter metric.Meter) *clientInstruments {
 // ClientInterceptor creates interceptors with logging, metrics, and tracing for grpc clients.
 type ClientInterceptor struct {
 	opts        Options
-	observer    *observer.Observer
+	observer    observer.Observer
 	instruments *clientInstruments
 }
 
 // NewClientInterceptor creates a new server interceptor for observability.
-func NewClientInterceptor(observer *observer.Observer, opts Options) *ClientInterceptor {
+func NewClientInterceptor(observer observer.Observer, opts Options) *ClientInterceptor {
 	opts = opts.withDefaults()
 	instruments := newClientInstruments(observer.Meter())
 
@@ -140,7 +140,7 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	grpctrace.Inject(ctx, &md)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	// Call the gRPC method invoker
+	// Call gRPC method invoker
 	span.AddEvent(ctx, "invoking grpc method")
 	err := invoker(ctx, fullMethod, req, res, cc, opts...)
 
@@ -274,7 +274,7 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	grpctrace.Inject(ctx, &md)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	// Call the gRPC method invoker
+	// Call gRPC method streamer
 	span.AddEvent(ctx, "invoking grpc method")
 	cs, err := streamer(ctx, desc, cc, fullMethod, opts...)
 

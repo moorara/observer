@@ -53,8 +53,34 @@ func (opts Options) withDefaults() Options {
 	return opts
 }
 
-// Observer provides a logger, a meter, and a tracer for observability capabilities.
-type Observer struct {
+// Observer provides logging, metrics, and tracing capabilities for observability.
+type Observer interface {
+	// Close implements io.Closer interface. It flushes the logger, meter, and tracer.
+	Close() error
+
+	// Name is returns the name of the observer.
+	Name() string
+
+	// Logger is used for accessing the logger.
+	Logger() *zap.Logger
+
+	// SetLogLevel changes the logging level.
+	SetLogLevel(level zapcore.Level)
+
+	// GetLogLevel returns the current logging level.
+	GetLogLevel() zapcore.Level
+
+	// Meter is used for accessing the meter.
+	Meter() metric.Meter
+
+	// Tracer is used for accessing the tracer.
+	Tracer() trace.Tracer
+
+	// ServeHTTP implements http.Handler interface. It serves the metrics endpoint for Prometheus metrics.
+	ServeHTTP(w http.ResponseWriter, r *http.Request)
+}
+
+type observer struct {
 	name          string
 	logger        *zap.Logger
 	loggerConfig  *zap.Config
@@ -67,14 +93,14 @@ type Observer struct {
 // New creates a new observer.
 // If setAsSingleton set to true, the created observer will be set as the singleton observer too.
 // So, you can also access it using observer.Get() function.
-func New(setAsSingleton bool, opts Options) *Observer {
+func New(setAsSingleton bool, opts Options) Observer {
 	opts = opts.withDefaults()
 
 	logger, loggerConfig := newLogger(opts)
 	meter, metricHandler := newMeter(opts)
 	tracer, tracerFlush := newTracer(opts)
 
-	observer := &Observer{
+	observer := &observer{
 		name:          opts.Name,
 		logger:        logger,
 		loggerConfig:  loggerConfig,
@@ -92,16 +118,28 @@ func New(setAsSingleton bool, opts Options) *Observer {
 }
 
 func newLogger(opts Options) (*zap.Logger, *zap.Config) {
-	config := zap.NewProductionConfig()
-	config.Encoding = "json"
-	config.EncoderConfig.MessageKey = "message"
-	config.EncoderConfig.LevelKey = "level"
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.NameKey = "logger"
-	config.EncoderConfig.CallerKey = "caller"
-	config.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
-	config.OutputPaths = []string{"stdout"}
-	config.InitialFields = make(map[string]interface{})
+	config := zap.Config{
+		Level:       zap.NewAtomicLevelAt(zapcore.InfoLevel),
+		Development: false,
+		Sampling:    nil,
+		Encoding:    "json",
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "timestamp",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			MessageKey:     "message",
+			CallerKey:      "caller",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.EpochTimeEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+		},
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stdout"},
+		InitialFields:    make(map[string]interface{}),
+	}
 
 	if opts.Name != "" {
 		config.InitialFields["logger"] = opts.Name
@@ -214,51 +252,40 @@ func newTracer(opts Options) (trace.Tracer, func()) {
 	return tracer, flush
 }
 
-// Close implements io.Closer interface.
-// It flushes the logger, meter, and tracer.
-func (o *Observer) Close() error {
+func (o *observer) Close() error {
 	o.tracerFlush()
 	return o.logger.Sync()
 }
 
-// Name is returns the name of the observer.
-func (o *Observer) Name() string {
+func (o *observer) Name() string {
 	return o.name
 }
 
-// Logger is used for accessing the logger.
-func (o *Observer) Logger() *zap.Logger {
+func (o *observer) Logger() *zap.Logger {
 	return o.logger
 }
 
-// SetLogLevel changes the logging level.
-func (o *Observer) SetLogLevel(level zapcore.Level) {
+func (o *observer) SetLogLevel(level zapcore.Level) {
 	o.loggerConfig.Level.SetLevel(level)
 }
 
-// GetLogLevel returns the current logging level.
-func (o *Observer) GetLogLevel() zapcore.Level {
+func (o *observer) GetLogLevel() zapcore.Level {
 	return o.loggerConfig.Level.Level()
 }
 
-// Meter is used for accessing the meter.
-func (o *Observer) Meter() metric.Meter {
+func (o *observer) Meter() metric.Meter {
 	return o.meter
 }
 
-// Tracer is used for accessing the tracer.
-func (o *Observer) Tracer() trace.Tracer {
+func (o *observer) Tracer() trace.Tracer {
 	return o.tracer
 }
 
-// ServeHTTP implements http.Handler interface.
-// It serves the metrics endpoint for Prometheus metrics.
-func (o *Observer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (o *observer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	o.metricHandler.ServeHTTP(w, r)
 }
 
-// The singleton observer.
-var singleton *Observer
+var singleton *observer
 
 // Initialize the singleton observer with a no-op observer.
 // init function will be only called once in runtime regardless of how many times the package is imported.
@@ -266,7 +293,7 @@ func init() {
 	mp := metric.NoopProvider{}
 	tp := trace.NoopProvider{}
 
-	singleton = &Observer{
+	singleton = &observer{
 		logger:       zap.NewNop(),
 		loggerConfig: &zap.Config{},
 		meter:        mp.Meter("Noop"),
@@ -275,6 +302,6 @@ func init() {
 }
 
 // Get returns the singleton Observer.
-func Get() *Observer {
+func Get() Observer {
 	return singleton
 }
