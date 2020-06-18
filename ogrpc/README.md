@@ -1,6 +1,6 @@
 # ogrpc
 
-This package can be used for making [gRPC](https://grpc.io) servers and clients Observable.
+This package can be used for making [gRPC](https://grpc.io) servers and clients observable.
 It uses _interceptors_ to intercept your gRPC methods and provides logs, metrics, and traces out-of-the-box.
 
 ## Quick Start
