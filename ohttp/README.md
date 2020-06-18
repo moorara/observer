@@ -1,6 +1,6 @@
 # ohttp
 
-This package can be used for making [gRPC](https://grpc.io) servers and clients Observable.
+This package can be used for making http servers and clients observable.
 It uses _middleware_ to wrap your http handlers and provides logs, metrics, and traces out-of-the-box.
 
 ## Quick Start
