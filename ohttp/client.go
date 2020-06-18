@@ -206,6 +206,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		zap.Int("resp.statusCode", statusCode),
 		zap.String("resp.statusClass", statusClass),
 		zap.Int64("resp.duration", duration),
+		zap.String("traceId", span.SpanContext().TraceID.String()),
+		zap.String("spanId", span.SpanContext().SpanID.String()),
 	}
 
 	// Determine the log level based on the result

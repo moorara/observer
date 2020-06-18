@@ -120,6 +120,8 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 			zap.String("req.method", method),
 			zap.String("req.url", url),
 			zap.String("req.route", route),
+			zap.String("traceId", span.SpanContext().TraceID.String()),
+			zap.String("spanId", span.SpanContext().SpanID.String()),
 		}
 		if clientName != "" {
 			contextFields = append(contextFields, zap.String("client.name", clientName))
