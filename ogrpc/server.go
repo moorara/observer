@@ -155,6 +155,8 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 		zap.String("req.service", e.Service),
 		zap.String("req.method", e.Method),
 		zap.Bool("req.stream", stream),
+		zap.String("traceId", span.SpanContext().TraceID.String()),
+		zap.String("spanId", span.SpanContext().SpanID.String()),
 	}
 	if clientName != "" {
 		contextFields = append(contextFields, zap.String("client.name", clientName))
@@ -303,6 +305,8 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 		zap.String("req.service", e.Service),
 		zap.String("req.method", e.Method),
 		zap.Bool("req.stream", stream),
+		zap.String("traceId", span.SpanContext().TraceID.String()),
+		zap.String("spanId", span.SpanContext().SpanID.String()),
 	}
 	if clientName != "" {
 		contextFields = append(contextFields, zap.String("client.name", clientName))

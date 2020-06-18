@@ -172,6 +172,8 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 		zap.Bool("req.stream", stream),
 		zap.Bool("resp.success", success),
 		zap.Int64("resp.duration", duration),
+		zap.String("traceId", span.SpanContext().TraceID.String()),
+		zap.String("spanId", span.SpanContext().SpanID.String()),
 	}
 	if err != nil {
 		fields = append(fields, zap.String("grpc.error", err.Error()))
@@ -306,6 +308,8 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 		zap.Bool("req.stream", stream),
 		zap.Bool("resp.success", success),
 		zap.Int64("resp.duration", duration),
+		zap.String("traceId", span.SpanContext().TraceID.String()),
+		zap.String("spanId", span.SpanContext().SpanID.String()),
 	}
 	if err != nil {
 		fields = append(fields, zap.String("grpc.error", err.Error()))
