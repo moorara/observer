@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package zonePB;
+
+option go_package = "github.com/moorara/observer/ogrpc/example/zonePB";
+
+service ZoneManager {
+  rpc GetContainingZone (stream Location) returns (Zone);
+  rpc GetPlacesInZone (Zone) returns (GetPlacesResponse);
+  rpc GetUsersInZone (Zone) returns (stream UserInZone);
+  rpc GetUsersInZones (stream Zone) returns (stream UserInZone);
+}
+
+message Location {
+  double latitude  = 1;
+  double longitude = 2;
+}
+
+message Zone {
+  Location location = 1;
+  double   radius   = 2;
+}
+
+message Place {
+  string   id       = 1;
+  string   name     = 2;
+  Location location = 3;
+}
+
+message User {
+  string id   = 1;
+  string name = 2;
+}
+
+message UserInZone {
+  Location location = 1;
+  User     user     = 2;
+}
+
+message GetPlacesResponse {
+  Zone           zone   = 1;
+  repeated Place places = 2;
+}
