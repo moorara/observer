@@ -1,3 +1,5 @@
+[![Go Doc][godoc-image]][godoc-url]
+
 # ohttp
 
 This package can be used for making http servers and clients observable.
@@ -32,3 +34,7 @@ client := ohttp.NewClient(c, obsv, ohttp.Options{})
 ```
 
 You can find the full example [here](./example).
+
+
+[godoc-url]: https://pkg.go.dev/github.com/moorara/observer/ohttp
+[godoc-image]: https://godoc.org/github.com/moorara/observer/ohttp?status.svg
