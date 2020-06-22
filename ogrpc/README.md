@@ -1,3 +1,5 @@
+[![Go Doc][godoc-image]][godoc-url]
+
 # ogrpc
 
 This package can be used for making [gRPC](https://grpc.io) servers and clients observable.
@@ -37,3 +39,7 @@ client := zonePB.NewZoneManagerClient(conn)
 ```
 
 You can find the full example [here](./example).
+
+
+[godoc-url]: https://pkg.go.dev/github.com/moorara/observer/ogrpc
+[godoc-image]: https://godoc.org/github.com/moorara/observer/ogrpc?status.svg
