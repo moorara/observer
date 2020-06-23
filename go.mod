@@ -11,6 +11,6 @@ require (
 	go.opentelemetry.io/otel/exporters/metric/prometheus v0.6.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.6.0
 	go.uber.org/zap v1.15.0
-	google.golang.org/grpc v1.29.1
+	google.golang.org/grpc v1.30.0
 	google.golang.org/protobuf v1.24.0
 )
