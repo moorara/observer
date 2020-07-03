@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.2.2](https://github.com/moorara/observer/tree/v0.2.2) (2020-07-03)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.2.1...v0.2.2)
+
+**Merged pull requests:**
+
+- Update OpenTelemetry module to v0.7.0 [\#40](https://github.com/moorara/observer/pull/40) ([moorara](https://github.com/moorara))
+- Update module google.golang.org/protobuf to v1.25.0 [\#38](https://github.com/moorara/observer/pull/38) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module prometheus/client\_golang to v1.7.1 [\#37](https://github.com/moorara/observer/pull/37) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module google.golang.org/grpc to v1.30.0 [\#36](https://github.com/moorara/observer/pull/36) ([renovate[bot]](https://github.com/apps/renovate))
+- Add Go Doc README badges [\#35](https://github.com/moorara/observer/pull/35) ([moorara](https://github.com/moorara))
+
 ## [v0.2.1](https://github.com/moorara/observer/tree/v0.2.1) (2020-06-18)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.2.0...v0.2.1)
