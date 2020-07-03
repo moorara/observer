@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/plugin/httptrace"
+	"go.opentelemetry.io/otel/instrumentation/httptrace"
 	"go.uber.org/zap"
 )
 
@@ -31,19 +31,19 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 			"incoming_http_requests_total",
 			metric.WithDescription("The total number of incoming http requests (server-side)"),
 			metric.WithUnit(unit.Dimensionless),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 		reqGauge: mm.NewInt64UpDownCounter(
 			"incoming_http_requests_active",
 			metric.WithDescription("The number of in-flight incoming http requests (server-side)"),
 			metric.WithUnit(unit.Dimensionless),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 		reqDuration: mm.NewInt64ValueRecorder(
 			"incoming_http_requests_duration",
 			metric.WithDescription("The duration of incoming http requests in milliseconds (server-side)"),
 			metric.WithUnit(unit.Milliseconds),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 	}
 }
