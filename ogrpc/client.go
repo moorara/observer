@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/plugin/grpctrace"
+	"go.opentelemetry.io/otel/instrumentation/grpctrace"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -34,19 +34,19 @@ func newClientInstruments(meter metric.Meter) *clientInstruments {
 			"outgoing_grpc_requests_total",
 			metric.WithDescription("The total number of outgoing grpc requests (client-side)"),
 			metric.WithUnit(unit.Dimensionless),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 		reqGauge: mm.NewInt64UpDownCounter(
 			"outgoing_grpc_requests_active",
 			metric.WithDescription("The number of in-flight outgoing grpc requests (client-side)"),
 			metric.WithUnit(unit.Dimensionless),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 		reqDuration: mm.NewInt64ValueRecorder(
 			"outgoing_grpc_requests_duration",
 			metric.WithDescription("The duration of outgoing grpc requests in seconds (client-side)"),
 			metric.WithUnit(unit.Milliseconds),
-			metric.WithLibraryName(libraryName),
+			metric.WithInstrumentationName(libraryName),
 		),
 	}
 }
