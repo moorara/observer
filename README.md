@@ -8,7 +8,7 @@
 
 This package can be used for building observable applications in Go.
 It aims to unify three pillars of observability in one single package that is _easy-to-use_ and _hard-to-misuse_.
-This package leverages the [OpenTelemetry](https://opentelemetry.io) API in an opinionated way.
+This package leverages the [OpenTelemetry](https://opentelemetry.io) API.
 
 An Observer encompasses a logger, a meter, and a tracer.
 It offers a single unified developer experience for enabling observability.
@@ -48,9 +48,7 @@ package main
 
 import (
   "context"
-  "log"
   "net/http"
-  "runtime"
   "time"
 
   "github.com/moorara/observer"
@@ -61,26 +59,16 @@ import (
 )
 
 type instruments struct {
-  reqCounter   metric.Int64Counter
-  reqDuration  metric.Float64ValueRecorder
-  allocatedMem metric.Int64ValueObserver
+  reqCounter  metric.Int64Counter
+  reqDuration metric.Float64ValueRecorder
 }
 
 func newInstruments(meter metric.Meter) *instruments {
   mm := metric.Must(meter)
 
-  callback := func(ctx context.Context, result metric.Int64ObserverResult) {
-    ms := new(runtime.MemStats)
-    runtime.ReadMemStats(ms)
-    result.Observe(int64(ms.Alloc),
-      kv.String("function", "ReadMemStats"),
-    )
-  }
-
   return &instruments{
-    reqCounter:   mm.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
-    reqDuration:  mm.NewFloat64ValueRecorder("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
-    allocatedMem: mm.NewInt64ValueObserver("allocated_memory_bytes", callback, metric.WithDescription("number of bytes allocated and in use")),
+    reqCounter:  mm.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
+    reqDuration: mm.NewFloat64ValueRecorder("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
   }
 }
 
@@ -163,28 +151,23 @@ func main() {
 
   // Serving metrics endpoint
   http.Handle("/metrics", obsv)
-  log.Fatal(http.ListenAndServe(":8080", nil))
+  http.ListenAndServe(":8080", nil)
 }
 ```
 
 Here are the logs from stdout:
 
 ```json
-{"level":"info","timestamp":"2020-06-18T14:15:05.006557-04:00","caller":"example/main.go:69","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-07-31T16:17:23.67794-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
 And here are the metrics reported at http://localhost:8080/metrics:
 
 ```
-# HELP allocated_memory_bytes number of bytes allocated and in use
-# TYPE allocated_memory_bytes histogram
-allocated_memory_bytes_bucket{function="ReadMemStats",le="+Inf"} 2
-allocated_memory_bytes_sum{function="ReadMemStats"} 2.454424e+06
-allocated_memory_bytes_count{function="ReadMemStats"} 2
 # HELP request_duration_seconds the duration of requests in seconds
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
-request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.065625226
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063812057
 request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter
