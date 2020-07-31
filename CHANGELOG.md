@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.2.3](https://github.com/moorara/observer/tree/v0.2.3) (2020-07-31)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.2.2...v0.2.3)
+
+**Merged pull requests:**
+
+- Update repo [\#45](https://github.com/moorara/observer/pull/45) ([moorara](https://github.com/moorara))
+- Update module google.golang.org/grpc to v1.31.0 [\#44](https://github.com/moorara/observer/pull/44) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module go.opentelemetry.io/otel to v0.9.0 [\#42](https://github.com/moorara/observer/pull/42) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module go.opentelemetry.io/otel to v0.8.0 [\#41](https://github.com/moorara/observer/pull/41) ([renovate[bot]](https://github.com/apps/renovate))
+
 ## [v0.2.2](https://github.com/moorara/observer/tree/v0.2.2) (2020-07-03)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.2.1...v0.2.2)
