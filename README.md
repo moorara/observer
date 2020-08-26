@@ -8,7 +8,15 @@
 
 This package can be used for building observable applications in Go.
 It aims to unify three pillars of observability in one single package that is _easy-to-use_ and _hard-to-misuse_.
+
 This package leverages the [OpenTelemetry](https://opentelemetry.io) API.
+OpenTelemetry is a great initiative that has brought all different standards and APIs for observability under one umbrella.
+However, due to the requirements for interoperability with existing systems, OpenTelemetry is complex and hard to use by design!
+Many packages, configurations, and options make the developer experience not so pleasant.
+Furthermore, due to the changing nature of this project, OpenTelemetry specification changes often so does the Go library for OpenTelemetry.
+In my humble opinion, this is not how a single unified observability API should be.
+Hopefully, many of these issues will go away once the API reaches to v1.0.0.
+This package intends to provide a very minimal and yet practical API for observability by hiding the complexity of configuring and using OpenTelemetry API.
 
 An Observer encompasses a logger, a meter, and a tracer.
 It offers a single unified developer experience for enabling observability.
