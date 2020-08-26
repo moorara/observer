@@ -163,19 +163,19 @@ func main() {
 }
 ```
 
-Here are the logs from stdout:
+Here are the logs from stdout :
 
 ```json
-{"level":"info","timestamp":"2020-07-31T16:17:23.67794-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-08-26T12:18:20.338144-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
-And here are the metrics reported at http://localhost:8080/metrics:
+And here are the metrics reported at http://localhost:8080/metrics :
 
 ```
 # HELP request_duration_seconds the duration of requests in seconds
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
-request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063812057
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063731055
 request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter
