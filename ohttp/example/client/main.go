@@ -9,7 +9,7 @@ import (
 	"github.com/moorara/observer"
 	"github.com/moorara/observer/ohttp"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 )
 
@@ -44,7 +44,7 @@ func main() {
 
 	ctx := context.Background()
 	ctx = correlation.NewContext(ctx,
-		kv.String("tenant", "1234"),
+		label.String("tenant", "1234"),
 	)
 
 	resp, err := client.Do(req)

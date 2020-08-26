@@ -8,7 +8,15 @@
 
 This package can be used for building observable applications in Go.
 It aims to unify three pillars of observability in one single package that is _easy-to-use_ and _hard-to-misuse_.
+
 This package leverages the [OpenTelemetry](https://opentelemetry.io) API.
+OpenTelemetry is a great initiative that has brought all different standards and APIs for observability under one umbrella.
+However, due to the requirements for interoperability with existing systems, OpenTelemetry is complex and hard to use by design!
+Many packages, configurations, and options make the developer experience not so pleasant.
+Furthermore, due to the changing nature of this project, OpenTelemetry specification changes often so does the Go library for OpenTelemetry.
+In my humble opinion, this is not how a single unified observability API should be.
+Hopefully, many of these issues will go away once the API reaches to v1.0.0.
+This package intends to provide a very minimal and yet practical API for observability by hiding the complexity of configuring and using OpenTelemetry API.
 
 An Observer encompasses a logger, a meter, and a tracer.
 It offers a single unified developer experience for enabling observability.
@@ -53,7 +61,7 @@ import (
 
   "github.com/moorara/observer"
   "go.opentelemetry.io/otel/api/correlation"
-  "go.opentelemetry.io/otel/api/kv"
+  "go.opentelemetry.io/otel/label"
   "go.opentelemetry.io/otel/api/metric"
   "go.uber.org/zap"
 )
@@ -87,10 +95,10 @@ func (s *server) Handle(ctx context.Context) {
   s.respond(ctx)
   duration := time.Now().Sub(start)
 
-  labels := []kv.KeyValue{
-    kv.String("method", "GET"),
-    kv.String("endpoint", "/user"),
-    kv.Uint("statusCode", 200),
+  labels := []label.KeyValue{
+    label.String("method", "GET"),
+    label.String("endpoint", "/user"),
+    label.Uint("statusCode", 200),
   }
 
   // Metrics
@@ -144,7 +152,7 @@ func main() {
   // Creating a correlation context
   ctx := context.Background()
   ctx = correlation.NewContext(ctx,
-    kv.String("tenant", "1234"),
+    label.String("tenant", "1234"),
   )
 
   srv.Handle(ctx)
@@ -155,19 +163,19 @@ func main() {
 }
 ```
 
-Here are the logs from stdout:
+Here are the logs from stdout :
 
 ```json
-{"level":"info","timestamp":"2020-07-31T16:17:23.67794-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-08-26T12:18:20.338144-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
-And here are the metrics reported at http://localhost:8080/metrics:
+And here are the metrics reported at http://localhost:8080/metrics :
 
 ```
 # HELP request_duration_seconds the duration of requests in seconds
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
-request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063812057
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063731055
 request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter

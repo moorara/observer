@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -84,4 +85,21 @@ func ServerStreamWithContext(ctx context.Context, s grpc.ServerStream) grpc.Serv
 		ServerStream: s,
 		ctx:          ctx,
 	}
+}
+
+// metadataSupplier implements propagation.HTTPSupplier interface.
+type metadataSupplier struct {
+	md *metadata.MD
+}
+
+func (s *metadataSupplier) Get(key string) string {
+	values := s.md.Get(key)
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func (s *metadataSupplier) Set(key string, value string) {
+	s.md.Set(key, value)
 }
