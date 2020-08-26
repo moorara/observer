@@ -8,11 +8,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/instrumentation/grpctrace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -99,10 +101,10 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Make sure the request has a UUID
@@ -125,8 +127,8 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 	// Create a new correlation context
 	ctx = correlation.NewContext(ctx,
-		kv.String("req.uuid", requestUUID),
-		kv.String("client.name", i.observer.Name()),
+		label.String("req.uuid", requestUUID),
+		label.String("client.name", i.observer.Name()),
 	)
 
 	// Start a new span
@@ -137,7 +139,7 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	defer span.End()
 
 	// Inject the correlation context and the span context into the grpc metadata
-	grpctrace.Inject(ctx, &md)
+	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Call gRPC method invoker
@@ -149,12 +151,12 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 	// Report metrics
 	i.observer.Meter().RecordBatch(ctx,
-		[]kv.KeyValue{
-			kv.String("package", e.Package),
-			kv.String("service", e.Service),
-			kv.String("method", e.Method),
-			kv.Bool("stream", stream),
-			kv.Bool("success", success),
+		[]label.KeyValue{
+			label.String("package", e.Package),
+			label.String("service", e.Service),
+			label.String("method", e.Method),
+			label.Bool("stream", stream),
+			label.Bool("success", success),
 		},
 		i.instruments.reqCounter.Measurement(1),
 		i.instruments.reqDuration.Measurement(duration),
@@ -192,22 +194,23 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 	// Decrease the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, -1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Report the span
 	span.SetAttributes(
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
-		kv.Bool("success", success),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+		label.Bool("success", success),
 	)
 	if err != nil {
-		span.SetStatus(status.Code(err), err.Error())
+		code := codes.Code(status.Code(err))
+		span.SetStatus(code, err.Error())
 	}
 
 	return err
@@ -234,10 +237,10 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Make sure the request has a UUID
@@ -261,8 +264,8 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 
 	// Create a new correlation context
 	ctx = correlation.NewContext(ctx,
-		kv.String("req.uuid", requestUUID),
-		kv.String("client.name", i.observer.Name()),
+		label.String("req.uuid", requestUUID),
+		label.String("client.name", i.observer.Name()),
 	)
 
 	// Start a new span
@@ -273,7 +276,7 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	defer span.End()
 
 	// Inject the correlation context and the span context into the grpc metadata
-	grpctrace.Inject(ctx, &md)
+	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Call gRPC method streamer
@@ -285,12 +288,12 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 
 	// Report metrics
 	i.observer.Meter().RecordBatch(ctx,
-		[]kv.KeyValue{
-			kv.String("package", e.Package),
-			kv.String("service", e.Service),
-			kv.String("method", e.Method),
-			kv.Bool("stream", stream),
-			kv.Bool("success", success),
+		[]label.KeyValue{
+			label.String("package", e.Package),
+			label.String("service", e.Service),
+			label.String("method", e.Method),
+			label.Bool("stream", stream),
+			label.Bool("success", success),
 		},
 		i.instruments.reqCounter.Measurement(1),
 		i.instruments.reqDuration.Measurement(duration),
@@ -328,22 +331,23 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 
 	// Decrease the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, -1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Report the span
 	span.SetAttributes(
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
-		kv.Bool("success", success),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+		label.Bool("success", success),
 	)
 	if err != nil {
-		span.SetStatus(status.Code(err), err.Error())
+		code := codes.Code(status.Code(err))
+		span.SetStatus(code, err.Error())
 	}
 
 	return cs, err

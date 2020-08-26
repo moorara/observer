@@ -8,11 +8,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/instrumentation/grpctrace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -99,10 +101,10 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Get grpc request metadata
@@ -130,17 +132,23 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 		clientName = vals[0]
 	}
 
-	// Extract correlation context entries and parent span context if any
-	entries, spanContext := grpctrace.Extract(ctx, &md)
+	// Extract correlation context from the grpc metadata
+	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 
-	// Create a new correlation context with the extracted entries and new ones
-	entries = append(entries,
-		kv.String("req.uuid", requestUUID),
+	// Get span context and propagated key-values
+	// spanContext := trace.RemoteSpanContextFromContext(ctx)
+	var keyvalues []label.KeyValue
+	correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+		keyvalues = append(keyvalues, kv)
+		return true
+	})
+
+	// Create a new correlation context
+	ctx = correlation.NewContext(ctx,
+		label.String("req.uuid", requestUUID),
 	)
-	ctx = correlation.NewContext(ctx, entries...)
 
 	// Start a new span
-	ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
 	ctx, span := i.observer.Tracer().Start(ctx,
 		fmt.Sprintf("%s (server unary)", e.Method),
 		trace.WithSpanKind(trace.SpanKindServer),
@@ -176,12 +184,12 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 
 	// Report metrics
 	i.observer.Meter().RecordBatch(ctx,
-		[]kv.KeyValue{
-			kv.String("package", e.Package),
-			kv.String("service", e.Service),
-			kv.String("method", e.Method),
-			kv.Bool("stream", stream),
-			kv.Bool("success", success),
+		[]label.KeyValue{
+			label.String("package", e.Package),
+			label.String("service", e.Service),
+			label.String("method", e.Method),
+			label.Bool("stream", stream),
+			label.Bool("success", success),
 		},
 		i.instruments.reqCounter.Measurement(1),
 		i.instruments.reqDuration.Measurement(duration),
@@ -210,22 +218,23 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 
 	// Decrease the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, -1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Report the span
 	span.SetAttributes(
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
-		kv.Bool("success", success),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+		label.Bool("success", success),
 	)
 	if err != nil {
-		span.SetStatus(status.Code(err), err.Error())
+		code := codes.Code(status.Code(err))
+		span.SetStatus(code, err.Error())
 	}
 
 	return res, err
@@ -253,10 +262,10 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Get grpc request metadata (an incoming grpc request context is guaranteed to have metadata)
@@ -280,17 +289,23 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 		clientName = vals[0]
 	}
 
-	// Extract correlation context entries and parent span context if any
-	entries, spanContext := grpctrace.Extract(ctx, &md)
+	// Extract correlation context from the grpc metadata
+	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 
-	// Create a new correlation context with the extracted entries and new ones
-	entries = append(entries,
-		kv.String("req.uuid", requestUUID),
+	// Get span context and propagated key-values
+	// spanContext := trace.RemoteSpanContextFromContext(ctx)
+	var keyvalues []label.KeyValue
+	correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+		keyvalues = append(keyvalues, kv)
+		return true
+	})
+
+	// Create a new correlation context
+	ctx = correlation.NewContext(ctx,
+		label.String("req.uuid", requestUUID),
 	)
-	ctx = correlation.NewContext(ctx, entries...)
 
 	// Start a new span
-	ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
 	ctx, span := i.observer.Tracer().Start(ctx,
 		fmt.Sprintf("%s (server stream)", e.Method),
 		trace.WithSpanKind(trace.SpanKindServer),
@@ -327,12 +342,12 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 
 	// Report metrics
 	i.observer.Meter().RecordBatch(ctx,
-		[]kv.KeyValue{
-			kv.String("package", e.Package),
-			kv.String("service", e.Service),
-			kv.String("method", e.Method),
-			kv.Bool("stream", stream),
-			kv.Bool("success", success),
+		[]label.KeyValue{
+			label.String("package", e.Package),
+			label.String("service", e.Service),
+			label.String("method", e.Method),
+			label.Bool("stream", stream),
+			label.Bool("success", success),
 		},
 		i.instruments.reqCounter.Measurement(1),
 		i.instruments.reqDuration.Measurement(duration),
@@ -361,22 +376,23 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 
 	// Decrease the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, -1,
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
 	)
 
 	// Report the span
 	span.SetAttributes(
-		kv.String("package", e.Package),
-		kv.String("service", e.Service),
-		kv.String("method", e.Method),
-		kv.Bool("stream", stream),
-		kv.Bool("success", success),
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+		label.Bool("success", success),
 	)
 	if err != nil {
-		span.SetStatus(status.Code(err), err.Error())
+		code := codes.Code(status.Code(err))
+		span.SetStatus(code, err.Error())
 	}
 
 	return err

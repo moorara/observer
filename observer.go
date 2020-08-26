@@ -14,9 +14,9 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/label"
 
 	"go.opentelemetry.io/otel/sdk/metric/controller/pull"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
@@ -223,9 +223,9 @@ func newTracer(opts Options) (trace.Tracer, func()) {
 		)
 	}
 
-	tags := []kv.KeyValue{}
+	tags := []label.KeyValue{}
 	for k, v := range opts.Tags {
-		tags = append(tags, kv.String(k, v))
+		tags = append(tags, label.String(k, v))
 	}
 
 	processOpt := jaegerexporter.WithProcess(

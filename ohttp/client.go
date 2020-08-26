@@ -11,11 +11,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/instrumentation/httptrace"
+	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 )
 
@@ -137,8 +138,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 	// Increase the number of in-flight requests
 	c.instruments.reqGauge.Add(ctx, 1,
-		kv.String("method", method),
-		kv.String("route", route),
+		label.String("method", method),
+		label.String("route", route),
 	)
 
 	// Make sure the request has a UUID
@@ -153,8 +154,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 	// Create a new correlation context
 	ctx = correlation.NewContext(ctx,
-		kv.String("req.uuid", requestUUID),
-		kv.String("client.name", c.observer.Name()),
+		label.String("req.uuid", requestUUID),
+		label.String("client.name", c.observer.Name()),
 	)
 
 	// Start a new span
@@ -165,8 +166,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	defer span.End()
 
 	// Inject the correlation context and the span context into the http headers
-	ctx, req = httptrace.W3C(ctx, req)
-	httptrace.Inject(ctx, req)
+	propagation.InjectHTTP(ctx, global.Propagators(), req.Header)
 
 	// Make the http call
 	span.AddEvent(ctx, "making http call")
@@ -184,11 +184,11 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 	// Report metrics
 	c.observer.Meter().RecordBatch(ctx,
-		[]kv.KeyValue{
-			kv.String("method", method),
-			kv.String("route", route),
-			kv.Int("status_code", statusCode),
-			kv.String("status_class", statusClass),
+		[]label.KeyValue{
+			label.String("method", method),
+			label.String("route", route),
+			label.Int("status_code", statusCode),
+			label.String("status_class", statusClass),
 		},
 		c.instruments.reqCounter.Measurement(1),
 		c.instruments.reqDuration.Measurement(duration),
@@ -228,16 +228,16 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 	// Decrease the number of in-flight requests
 	c.instruments.reqGauge.Add(ctx, -1,
-		kv.String("method", method),
-		kv.String("route", route),
+		label.String("method", method),
+		label.String("route", route),
 	)
 
 	// Report the span
 	span.SetAttributes(
-		kv.String("method", method),
-		kv.String("url", url),
-		kv.String("route", route),
-		kv.Int("status_code", statusCode),
+		label.String("method", method),
+		label.String("url", url),
+		label.String("route", route),
+		label.Int("status_code", statusCode),
 	)
 
 	return resp, err

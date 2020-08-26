@@ -8,11 +8,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
 	"go.opentelemetry.io/otel/api/correlation"
-	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
+	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/api/unit"
-	"go.opentelemetry.io/otel/instrumentation/httptrace"
+	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 )
 
@@ -81,8 +82,8 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 
 		// Increase the number of in-flight requests
 		m.instruments.reqGauge.Add(ctx, 1,
-			kv.String("method", method),
-			kv.String("route", route),
+			label.String("method", method),
+			label.String("route", route),
 		)
 
 		// Make sure the request has a UUID
@@ -95,18 +96,23 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 		// Get the name of client for the request if any
 		clientName := r.Header.Get(clientNameHeader)
 
-		// Extract correlation context entries and parent span context if any
-		// The first return value is a list of http attributes for the request
-		_, entries, spanContext := httptrace.Extract(ctx, r)
+		// Extract correlation context from the http headers
+		ctx = propagation.ExtractHTTP(ctx, global.Propagators(), r.Header)
 
-		// Create a new correlation context with the extracted entries and new ones
-		entries = append(entries,
-			kv.String("req.uuid", requestUUID),
+		// Get span context and propagated key-values
+		// spanContext := trace.RemoteSpanContextFromContext(ctx)
+		var keyvalues []label.KeyValue
+		correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+			keyvalues = append(keyvalues, kv)
+			return true
+		})
+
+		// Create a new correlation context
+		ctx = correlation.NewContext(ctx,
+			label.String("req.uuid", requestUUID),
 		)
-		ctx = correlation.NewContext(ctx, entries...)
 
 		// Start a new span
-		ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
 		ctx, span := m.observer.Tracer().Start(ctx,
 			"http-server-request",
 			trace.WithSpanKind(trace.SpanKindServer),
@@ -146,11 +152,11 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 
 		// Report metrics
 		m.observer.Meter().RecordBatch(ctx,
-			[]kv.KeyValue{
-				kv.String("method", method),
-				kv.String("route", route),
-				kv.Int("status_code", statusCode),
-				kv.String("status_class", statusClass),
+			[]label.KeyValue{
+				label.String("method", method),
+				label.String("route", route),
+				label.Int("status_code", statusCode),
+				label.String("status_class", statusClass),
 			},
 			m.instruments.reqCounter.Measurement(1),
 			m.instruments.reqDuration.Measurement(duration),
@@ -182,16 +188,16 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 
 		// Decrease the number of in-flight requests
 		m.instruments.reqGauge.Add(ctx, -1,
-			kv.String("method", method),
-			kv.String("route", route),
+			label.String("method", method),
+			label.String("route", route),
 		)
 
 		// Report the span
 		span.SetAttributes(
-			kv.String("method", method),
-			kv.String("url", url),
-			kv.String("route", route),
-			kv.Int("status_code", statusCode),
+			label.String("method", method),
+			label.String("url", url),
+			label.String("route", route),
+			label.Int("status_code", statusCode),
 		)
 	}
 }

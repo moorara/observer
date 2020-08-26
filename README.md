@@ -53,7 +53,7 @@ import (
 
   "github.com/moorara/observer"
   "go.opentelemetry.io/otel/api/correlation"
-  "go.opentelemetry.io/otel/api/kv"
+  "go.opentelemetry.io/otel/label"
   "go.opentelemetry.io/otel/api/metric"
   "go.uber.org/zap"
 )
@@ -87,10 +87,10 @@ func (s *server) Handle(ctx context.Context) {
   s.respond(ctx)
   duration := time.Now().Sub(start)
 
-  labels := []kv.KeyValue{
-    kv.String("method", "GET"),
-    kv.String("endpoint", "/user"),
-    kv.Uint("statusCode", 200),
+  labels := []label.KeyValue{
+    label.String("method", "GET"),
+    label.String("endpoint", "/user"),
+    label.Uint("statusCode", 200),
   }
 
   // Metrics
@@ -144,7 +144,7 @@ func main() {
   // Creating a correlation context
   ctx := context.Background()
   ctx = correlation.NewContext(ctx,
-    kv.String("tenant", "1234"),
+    label.String("tenant", "1234"),
   )
 
   srv.Handle(ctx)
