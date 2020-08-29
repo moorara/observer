@@ -183,6 +183,31 @@ requests_total{endpoint="/user",method="GET",statusCode="200"} 1
 ```
 </details>
 
+## Options
+
+Most options can be set through environment variables.
+This lets SRE people change how the observability pipeline is configured without making any code change.
+
+Options set explicity in the code will override those set by environment variables.
+
+| Environment Variable | Description |
+|----------------------|-------------|
+| `OBSERVER_NAME` | The name of service or application. |
+| `OBSERVER_VERSION` | The version of service or application. |
+| `OBSERVER_ENVIRONMENT` | The name of environment in which the service or application is running. |
+| `OBSERVER_REGION` | The name of region in which the service or application is running. |
+| `OBSERVER_TAG_*` | Each variable prefixed with `OBSERVER_TAG_` represents a tag for the service or application. |
+| `OBSERVER_LOGGER_ENABLED` | Whether or not to create a logger (boolean). |
+| `OBSERVER_LOGGER_LEVEL` | The verbosity level for the logger (`debug`, `info`, `warn`, `error`, or `none`). |
+| `OBSERVER_PROMETHEUS_ENABLED` | Whether or not to configure and create a Prometheus meter (boolean). |
+| `OBSERVER_JAEGER_ENABLED` | Whether or not to configure and create a Jaeger tracer (boolean). |
+| `OBSERVER_JAEGER_AGENT_ENDPOINT` | The address to the Jaeger agent (i.e. `localhost:6831`). |
+| `OBSERVER_JAEGER_COLLECTOR_ENDPOINT` | The full URL to the Jaeger HTTP Thrift collector (i.e. `http://localhost:14268/api/traces`). |
+| `OBSERVER_JAEGER_COLLECTOR_USERNAME` | The username for Jaeger collector endpoint if basic auth is required. |
+| `OBSERVER_JAEGER_COLLECTOR_PASSWORD` | The password for Jaeger collector endpoint if basic auth is required. |
+| `OBSERVER_OPENTELEMETRY_ENABLED` | Whether or not to configure and create an OpenTelemetry Collector meter and tracer (boolean). |
+| `OBSERVER_OPENTELEMETRY_COLLECTOR_ADDRESS` | The address to OpenTelemetry collector (i.e. `localhost:55680`). |
+
 ## OpenTelemetry
 
 ### Logging
@@ -233,6 +258,9 @@ _TBD_
   - **Tracing**
     - [Tracing API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md)
     - [go.opentelemetry.io/otel/api/trace](https://pkg.go.dev/go.opentelemetry.io/otel/api/trace)
+  - **OpenTelemetry**
+    - [Collector Configuration](https://opentelemetry.io/docs/collector/configuration)
+    - [Collector Architecture](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/design.md)
 
 
 [godoc-url]: https://pkg.go.dev/github.com/moorara/observer
