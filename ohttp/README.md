@@ -10,9 +10,9 @@ It uses _middleware_ to wrap your http handlers and provides logs, metrics, and 
 Here is a snippet of what you need to do on server-side:
 
 ```go
-obsv := observer.New(true, observer.Options{
-  Name:     "server",
-  LogLevel: "info",
+obsv := observer.New(true,
+  observer.WithMetadata("server", "", "", "", nil),
+  observer.WithLogger("info"),
 })
 defer obsv.Close()
 
@@ -23,9 +23,9 @@ wrapped := mid.Wrap(handler)
 And a snippet of what you need to do on client-side:
 
 ```go
-obsv := observer.New(true, observer.Options{
-  Name:     "client",
-  LogLevel: "info",
+obsv := observer.New(true,
+  observer.WithMetadata("client", "", "", "", nil),
+  observer.WithLogger("info"),
 })
 defer obsv.Close()
 

@@ -43,7 +43,6 @@ func TestConfigsFromEnv(t *testing.T) {
 				keyval{"OBSERVER_ENVIRONMENT", "production"},
 				keyval{"OBSERVER_REGION", "ca-central-1"},
 				keyval{"OBSERVER_TAG_DOMAIN", "auth"},
-				keyval{"OBSERVER_TAG_TENANT", "1234"},
 				keyval{"OBSERVER_LOGGER_ENABLED", "true"},
 				keyval{"OBSERVER_LOGGER_LEVEL", "warn"},
 				keyval{"OBSERVER_PROMETHEUS_ENABLED", "true"},
@@ -62,7 +61,6 @@ func TestConfigsFromEnv(t *testing.T) {
 				region:      "ca-central-1",
 				tags: map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				},
 				loggerEnabled:                     true,
 				loggerLevel:                       "warn",
@@ -114,7 +112,6 @@ func TestOption(t *testing.T) {
 			configs: &configs{},
 			option: WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
 				"domain": "auth",
-				"tenant": "1234",
 			}),
 			expectedConfigs: &configs{
 				name:        "my-service",
@@ -123,7 +120,6 @@ func TestOption(t *testing.T) {
 				region:      "ca-central-1",
 				tags: map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				},
 			},
 		},
@@ -221,7 +217,6 @@ func TestNew(t *testing.T) {
 			opts: []Option{
 				WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				}),
 				WithLogger("warn"),
 				WithPrometheus(),
@@ -234,7 +229,6 @@ func TestNew(t *testing.T) {
 			opts: []Option{
 				WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				}),
 				WithLogger("warn"),
 				WithOpenTelemetry("localhost:55680", nil),
@@ -266,7 +260,6 @@ func TestInitLogger(t *testing.T) {
 				region:      "ca-central-1",
 				tags: map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				},
 				loggerLevel: "warn",
 			},
@@ -369,7 +362,6 @@ func TestInitJaeger(t *testing.T) {
 				name: "my-service",
 				tags: map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				},
 				jaegerEnabled:       true,
 				jaegerAgentEndpoint: "localhost:6831",
@@ -381,7 +373,6 @@ func TestInitJaeger(t *testing.T) {
 				name: "my-service",
 				tags: map[string]string{
 					"domain": "auth",
-					"tenant": "1234",
 				},
 				jaegerEnabled:           true,
 				jaegerCollectorEndpoint: "http://localhost:14268/api/traces",

@@ -48,8 +48,16 @@ In other words, information captured by one trace does not tell anything about h
 
 ## Quick Start
 
+For the examples below, you can use the following `docker-compose.yml` file to bring up an observability stack:
+
+```bash
+git clone https://github.com/moorara/docker-compose.git
+cd docker-compose/observability
+docker-compose up -d
+```
+
 <details>
-  <summary>Example</summary>
+  <summary>Example: Prometheus & Jaeger</summary>
 
 ```go
 package main
@@ -61,8 +69,8 @@ import (
 
   "github.com/moorara/observer"
   "go.opentelemetry.io/otel/api/correlation"
-  "go.opentelemetry.io/otel/label"
   "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
 )
 
@@ -131,17 +139,14 @@ func (s *server) respond(ctx context.Context) {
 
 func main() {
   // Creating a new Observer and set it as the singleton
-  obsv := observer.New(true, observer.Options{
-    Name:        "my-service",
-    Version:     "0.1.0",
-    Environment: "production",
-    Region:      "ca-central-1",
-    Tags: map[string]string{
+  obsv := observer.New(true,
+    observer.WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
       "domain": "auth",
-    },
-    LogLevel:            "info",
-    JaegerAgentEndpoint: "localhost:6831",
-  })
+    }),
+    observer.WithLogger("info"),
+    observer.WithPrometheus(),
+    observer.WithJaeger("localhost:6831", "", "", ""),
+  )
   defer obsv.Close()
 
   srv := &server{
@@ -166,7 +171,7 @@ func main() {
 Here are the logs from stdout :
 
 ```json
-{"level":"info","timestamp":"2020-08-26T12:18:20.338144-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+{"level":"info","timestamp":"2020-08-29T21:10:47.763781-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
 ```
 
 And here are the metrics reported at http://localhost:8080/metrics :
@@ -175,12 +180,140 @@ And here are the metrics reported at http://localhost:8080/metrics :
 # HELP request_duration_seconds the duration of requests in seconds
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{endpoint="/user",method="GET",statusCode="200",le="+Inf"} 1
-request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.063731055
+request_duration_seconds_sum{endpoint="/user",method="GET",statusCode="200"} 0.065279047
 request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 # HELP requests_total the total number of requests
 # TYPE requests_total counter
 requests_total{endpoint="/user",method="GET",statusCode="200"} 1
 ```
+
+You can also verfiy a trace is reported to Jaeger by visiting http://localhost:16686 .
+</details>
+
+<details>
+  <summary>Example: OpenTelemetry Collector</summary>
+
+```go
+package main
+
+import (
+  "context"
+  "time"
+
+  "github.com/moorara/observer"
+  "go.opentelemetry.io/otel/api/correlation"
+  "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/label"
+  "go.uber.org/zap"
+)
+
+type instruments struct {
+  reqCounter  metric.Int64Counter
+  reqDuration metric.Float64ValueRecorder
+}
+
+func newInstruments(meter metric.Meter) *instruments {
+  mm := metric.Must(meter)
+
+  return &instruments{
+    reqCounter:  mm.NewInt64Counter("requests_total", metric.WithDescription("the total number of requests")),
+    reqDuration: mm.NewFloat64ValueRecorder("request_duration_seconds", metric.WithDescription("the duration of requests in seconds")),
+  }
+}
+
+type server struct {
+  observer    observer.Observer
+  instruments *instruments
+}
+
+func (s *server) Handle(ctx context.Context) {
+  // Tracing
+  ctx, span := s.observer.Tracer().Start(ctx, "handle-request")
+  defer span.End()
+
+  start := time.Now()
+  s.fetch(ctx)
+  s.respond(ctx)
+  duration := time.Now().Sub(start)
+
+  labels := []label.KeyValue{
+    label.String("method", "GET"),
+    label.String("endpoint", "/user"),
+    label.Uint("statusCode", 200),
+  }
+
+  // Metrics
+  s.observer.Meter().RecordBatch(ctx, labels,
+    s.instruments.reqCounter.Measurement(1),
+    s.instruments.reqDuration.Measurement(duration.Seconds()),
+  )
+
+  // Logging
+  s.observer.Logger().Info("request handled successfully.",
+    zap.String("method", "GET"),
+    zap.String("endpoint", "/user"),
+    zap.Uint("statusCode", 200),
+  )
+}
+
+func (s *server) fetch(ctx context.Context) {
+  _, span := s.observer.Tracer().Start(ctx, "read-database")
+  defer span.End()
+
+  time.Sleep(50 * time.Millisecond)
+}
+
+func (s *server) respond(ctx context.Context) {
+  _, span := s.observer.Tracer().Start(ctx, "send-response")
+  defer span.End()
+
+  time.Sleep(10 * time.Millisecond)
+}
+
+func main() {
+  // Creating a new Observer and set it as the singleton
+  obsv := observer.New(true,
+    observer.WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
+      "domain": "auth",
+    }),
+    observer.WithLogger("info"),
+    observer.WithOpenTelemetry("localhost:55680", nil),
+  )
+  defer obsv.Close()
+
+  srv := &server{
+    observer:    obsv,
+    instruments: newInstruments(obsv.Meter()),
+  }
+
+  // Creating a correlation context
+  ctx := context.Background()
+  ctx = correlation.NewContext(ctx,
+    label.String("tenant", "1234"),
+  )
+
+  srv.Handle(ctx)
+
+  // Wait before exiting
+  fmt.Scanln()
+}
+```
+
+Here are the logs from stdout :
+
+```json
+{"level":"info","timestamp":"2020-08-29T22:00:33.274878-04:00","caller":"example/main.go:57","message":"request handled successfully.","domain":"auth","environment":"production","logger":"my-service","region":"ca-central-1","version":"0.1.0","method":"GET","endpoint":"/user","statusCode":200}
+```
+
+You can verify metrics are reported to OpenTelemetry collector by visiting http://localhost:8889/metrics :
+
+```
+# HELP requests_total the total number of requests
+# TYPE requests_total gauge
+requests_total{endpoint="/user",method="GET",statusCode="200"} 1
+```
+
+You can also verfiy OpenTelemetry collector reported a trace to Jaeger by visiting http://localhost:16686 .
 </details>
 
 ## Options

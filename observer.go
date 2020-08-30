@@ -510,7 +510,9 @@ func (o *observer) Tracer() trace.Tracer {
 }
 
 func (o *observer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	o.promHandler.ServeHTTP(w, r)
+	if o.promHandler != nil {
+		o.promHandler.ServeHTTP(w, r)
+	}
 }
 
 var singleton *observer

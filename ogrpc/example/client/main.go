@@ -168,17 +168,14 @@ func getUsersInZones(client zonePB.ZoneManagerClient) {
 
 func main() {
 	// Creating a new Observer and set it as the singleton
-	obsv := observer.New(true, observer.Options{
-		Name:        "service-i",
-		Version:     "0.1.0",
-		Environment: "production",
-		Region:      "ca-central-1",
-		Tags: map[string]string{
+	obsv := observer.New(true,
+		observer.WithMetadata("client", "0.1.0", "production", "ca-central-1", map[string]string{
 			"domain": "core",
-		},
-		LogLevel:            "info",
-		JaegerAgentEndpoint: "localhost:6831",
-	})
+		}),
+		observer.WithLogger("info"),
+		observer.WithPrometheus(),
+		observer.WithJaeger("localhost:6831", "", "", ""),
+	)
 	defer obsv.Close()
 
 	ci := ogrpc.NewClientInterceptor(obsv, ogrpc.Options{})
