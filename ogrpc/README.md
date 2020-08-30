@@ -10,10 +10,10 @@ It uses _interceptors_ to intercept your gRPC methods and provides logs, metrics
 Here is a snippet of what you need to do on server-side:
 
 ```go
-obsv := observer.New(true, observer.Options{
-  Name:     "server",
-  LogLevel: "info",
-})
+obsv := observer.New(true,
+  observer.WithMetadata("server", "", "", "", nil),
+  observer.WithLogger("info"),
+)
 defer obsv.Close()
 
 si := ogrpc.NewServerInterceptor(obsv, ogrpc.Options{})
@@ -25,10 +25,10 @@ zonePB.RegisterZoneManagerServer(server, &ZoneServer{})
 And a snippet of what you need to do on client-side:
 
 ```go
-obsv := observer.New(true, observer.Options{
-  Name:     "client",
-  LogLevel: "info",
-})
+obsv := observer.New(true,
+  observer.WithMetadata("client", "", "", "", nil),
+  observer.WithLogger("info"),
+)
 defer obsv.Close()
 
 ci := ogrpc.NewClientInterceptor(obsv, ogrpc.Options{})

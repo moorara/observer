@@ -1,8 +1,10 @@
 package observer
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,117 +14,303 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func TestNew(t *testing.T) {
+func TestConfigsFromEnv(t *testing.T) {
+	type keyval struct {
+		name  string
+		value string
+	}
+
 	tests := []struct {
-		name           string
-		setAsSingleton bool
-		opts           Options
+		name            string
+		envars          []keyval
+		expectedConfigs configs
 	}{
 		{
-			name:           "Default",
-			setAsSingleton: false,
-			opts:           Options{},
+			name:   "Defaults",
+			envars: []keyval{},
+			expectedConfigs: configs{
+				loggerLevel:                   "info",
+				jaegerAgentEndpoint:           "localhost:6831",
+				opentelemetryCollectorAddress: "localhost:55680",
+				tags:                          map[string]string{},
+			},
 		},
 		{
-			name:           "Production",
-			setAsSingleton: true,
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
+			name: "All",
+			envars: []keyval{
+				keyval{"OBSERVER_NAME", "my-service"},
+				keyval{"OBSERVER_VERSION", "0.1.0"},
+				keyval{"OBSERVER_ENVIRONMENT", "production"},
+				keyval{"OBSERVER_REGION", "ca-central-1"},
+				keyval{"OBSERVER_TAG_DOMAIN", "auth"},
+				keyval{"OBSERVER_LOGGER_ENABLED", "true"},
+				keyval{"OBSERVER_LOGGER_LEVEL", "warn"},
+				keyval{"OBSERVER_PROMETHEUS_ENABLED", "true"},
+				keyval{"OBSERVER_JAEGER_ENABLED", "true"},
+				keyval{"OBSERVER_JAEGER_AGENT_ENDPOINT", "localhost:6831"},
+				keyval{"OBSERVER_JAEGER_COLLECTOR_ENDPOINT", "http://localhost:14268/api/traces"},
+				keyval{"OBSERVER_JAEGER_COLLECTOR_USERNAME", "username"},
+				keyval{"OBSERVER_JAEGER_COLLECTOR_PASSWORD", "password"},
+				keyval{"OBSERVER_OPENTELEMETRY_ENABLED", "true"},
+				keyval{"OBSERVER_OPENTELEMETRY_COLLECTOR_ADDRESS", "localhost:55680"},
+			},
+			expectedConfigs: configs{
+				name:        "my-service",
+				version:     "0.1.0",
+				environment: "production",
+				region:      "ca-central-1",
+				tags: map[string]string{
 					"domain": "auth",
 				},
-				LogLevel:            "warn",
-				JaegerAgentEndpoint: "localhost:6831",
+				loggerEnabled:                     true,
+				loggerLevel:                       "warn",
+				prometheusEnabled:                 true,
+				jaegerEnabled:                     true,
+				jaegerAgentEndpoint:               "localhost:6831",
+				jaegerCollectorEndpoint:           "http://localhost:14268/api/traces",
+				jaegerCollectorUserName:           "username",
+				jaegerCollectorPassword:           "password",
+				opentelemetryEnabled:              true,
+				opentelemetryCollectorAddress:     "localhost:55680",
+				opentelemetryCollectorCredentials: nil,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set environment variables
+			for _, envar := range tc.envars {
+				if err := os.Setenv(envar.name, envar.value); err != nil {
+					t.Fatalf("Failed to set environment variable %s: %s", envar.name, err)
+				}
+				defer os.Unsetenv(envar.name)
+			}
+
+			configs := configsFromEnv()
+
+			assert.Equal(t, tc.expectedConfigs, configs)
+		})
+	}
+}
+
+func TestOption(t *testing.T) {
+	tests := []struct {
+		name            string
+		configs         *configs
+		option          Option
+		expectedConfigs *configs
+	}{
+		{
+			name:            "WithMetadataDefaults",
+			configs:         &configs{},
+			option:          WithMetadata("", "", "", "", nil),
+			expectedConfigs: &configs{},
+		},
+		{
+			name:    "WithMetadata",
+			configs: &configs{},
+			option: WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
+				"domain": "auth",
+			}),
+			expectedConfigs: &configs{
+				name:        "my-service",
+				version:     "0.1.0",
+				environment: "production",
+				region:      "ca-central-1",
+				tags: map[string]string{
+					"domain": "auth",
+				},
+			},
+		},
+		{
+			name:    "WithLoggerDefaults",
+			configs: &configs{},
+			option:  WithLogger(""),
+			expectedConfigs: &configs{
+				loggerEnabled: true,
+				loggerLevel:   "info",
+			},
+		},
+		{
+			name:    "WithLogger",
+			configs: &configs{},
+			option:  WithLogger("warn"),
+			expectedConfigs: &configs{
+				loggerEnabled: true,
+				loggerLevel:   "warn",
+			},
+		},
+		{
+			name:    "WithPrometheus",
+			configs: &configs{},
+			option:  WithPrometheus(),
+			expectedConfigs: &configs{
+				prometheusEnabled: true,
+			},
+		},
+		{
+			name:    "WithJaegerDefaults",
+			configs: &configs{},
+			option:  WithJaeger("", "", "", ""),
+			expectedConfigs: &configs{
+				jaegerEnabled:       true,
+				jaegerAgentEndpoint: "localhost:6831",
+			},
+		},
+		{
+			name:    "WithJaeger",
+			configs: &configs{},
+			option:  WithJaeger("localhost:6831", "http://localhost:14268/api/traces", "username", "password"),
+			expectedConfigs: &configs{
+				jaegerEnabled:           true,
+				jaegerAgentEndpoint:     "localhost:6831",
+				jaegerCollectorEndpoint: "http://localhost:14268/api/traces",
+				jaegerCollectorUserName: "username",
+				jaegerCollectorPassword: "password",
+			},
+		},
+		{
+			name:    "WithOpenTelemetryDefaults",
+			configs: &configs{},
+			option:  WithOpenTelemetry("", nil),
+			expectedConfigs: &configs{
+				opentelemetryEnabled:          true,
+				opentelemetryCollectorAddress: "localhost:55680",
+			},
+		},
+		{
+			name:    "WithOpenTelemetry",
+			configs: &configs{},
+			option:  WithOpenTelemetry("localhost:55680", nil),
+			expectedConfigs: &configs{
+				opentelemetryEnabled:              true,
+				opentelemetryCollectorAddress:     "localhost:55680",
+				opentelemetryCollectorCredentials: nil,
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(T *testing.T) {
-			observer := New(tc.setAsSingleton, tc.opts)
+			tc.option(tc.configs)
 
-			assert.NotNil(t, observer)
-			assert.Equal(t, tc.opts.Name, observer.Name())
-			assert.NotNil(t, observer.Logger())
-			assert.NotNil(t, observer.Meter())
-			assert.NotNil(t, observer.Tracer())
+			assert.Equal(t, tc.expectedConfigs, tc.configs)
 		})
 	}
 }
 
-func TestNewLogger(t *testing.T) {
+func TestNew(t *testing.T) {
+	tests := []struct {
+		name           string
+		setAsSingleton bool
+		opts           []Option
+	}{
+		{
+			name:           "NoOption",
+			setAsSingleton: false,
+			opts:           []Option{},
+		},
+		{
+			name:           "PrometheusAndJaeger",
+			setAsSingleton: true,
+			opts: []Option{
+				WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
+					"domain": "auth",
+				}),
+				WithLogger("warn"),
+				WithPrometheus(),
+				WithJaeger("localhost:6831", "", "", ""),
+			},
+		},
+		{
+			name:           "OpenTelemetry",
+			setAsSingleton: true,
+			opts: []Option{
+				WithMetadata("my-service", "0.1.0", "production", "ca-central-1", map[string]string{
+					"domain": "auth",
+				}),
+				WithLogger("warn"),
+				WithOpenTelemetry("localhost:55680", nil),
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(T *testing.T) {
+			observer := New(tc.setAsSingleton, tc.opts...)
+
+			assert.NotNil(t, observer)
+		})
+	}
+}
+
+func TestInitLogger(t *testing.T) {
 	tests := []struct {
 		name          string
-		opts          Options
+		configs       configs
 		expectedLevel zapcore.Level
 	}{
 		{
-			name:          "Default",
-			opts:          Options{},
-			expectedLevel: zapcore.InfoLevel,
-		},
-		{
 			name: "Production",
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
+			configs: configs{
+				name:        "my-service",
+				version:     "0.1.0",
+				environment: "production",
+				region:      "ca-central-1",
+				tags: map[string]string{
 					"domain": "auth",
 				},
-				LogLevel: "warn",
+				loggerLevel: "warn",
 			},
 			expectedLevel: zapcore.WarnLevel,
 		},
 		{
 			name: "LogLevelDebug",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "debug",
+			configs: configs{
+				name:        "my-service",
+				loggerLevel: "debug",
 			},
 			expectedLevel: zapcore.DebugLevel,
 		},
 		{
 			name: "LogLevelInfo",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "info",
+			configs: configs{
+				name:        "my-service",
+				loggerLevel: "info",
 			},
 			expectedLevel: zapcore.InfoLevel,
 		},
 		{
 			name: "LogLevelWarn",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "warn",
+			configs: configs{
+				name:        "my-service",
+				loggerLevel: "warn",
 			},
 			expectedLevel: zapcore.WarnLevel,
 		},
 		{
 			name: "LogLevelError",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "error",
+			configs: configs{
+				name:        "my-service",
+				loggerLevel: "error",
 			},
 			expectedLevel: zapcore.ErrorLevel,
 		},
 		{
 			name: "LogLevelNone",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "none",
+			configs: configs{
+				name:        "my-service",
+				loggerLevel: "none",
 			},
 			expectedLevel: zapcore.Level(99),
 		},
 		{
 			name: "InvalidLogLevel",
-			opts: Options{
-				Name:     "my-service",
-				LogLevel: "invalid",
+			configs: configs{
+				name:          "my-service",
+				loggerEnabled: true,
+				loggerLevel:   "invalid",
 			},
 			expectedLevel: zapcore.Level(99),
 		},
@@ -130,8 +318,7 @@ func TestNewLogger(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(T *testing.T) {
-			opts := tc.opts.withDefaults()
-			logger, config := newLogger(opts)
+			logger, config := initLogger(tc.configs)
 
 			assert.NotNil(t, logger)
 			assert.NotNil(t, config)
@@ -140,27 +327,23 @@ func TestNewLogger(t *testing.T) {
 	}
 }
 
-func TestNewMeter(t *testing.T) {
+func TestInitPrometheus(t *testing.T) {
 	tests := []struct {
-		name string
-		opts Options
+		name    string
+		configs configs
 	}{
 		{
-			name: "Default",
-			opts: Options{},
-		},
-		{
 			name: "Production",
-			opts: Options{
-				Name: "my-service",
+			configs: configs{
+				name:              "my-service",
+				prometheusEnabled: true,
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := tc.opts.withDefaults()
-			meter, handler := newMeter(opts)
+			meter, handler := initPrometheus(tc.configs)
 
 			assert.NotNil(t, meter)
 			assert.NotNil(t, handler)
@@ -168,65 +351,73 @@ func TestNewMeter(t *testing.T) {
 	}
 }
 
-func TestNewTracer(t *testing.T) {
+func TestInitJaeger(t *testing.T) {
 	tests := []struct {
-		name string
-		opts Options
+		name    string
+		configs configs
 	}{
 		{
-			name: "Default",
-			opts: Options{},
-		},
-		{
-			name: "Production",
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
-					"domain": "auth",
-				},
-			},
-		},
-		{
 			name: "WithAgent",
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
+			configs: configs{
+				name: "my-service",
+				tags: map[string]string{
 					"domain": "auth",
 				},
-				JaegerAgentEndpoint: "localhost:6831",
+				jaegerEnabled:       true,
+				jaegerAgentEndpoint: "localhost:6831",
 			},
 		},
 		{
 			name: "WithCollector",
-			opts: Options{
-				Name:        "my-service",
-				Version:     "0.1.0",
-				Environment: "production",
-				Region:      "us-east-1",
-				Tags: map[string]string{
+			configs: configs{
+				name: "my-service",
+				tags: map[string]string{
 					"domain": "auth",
 				},
-				JaegerCollectorEndpoint: "http://localhost:14268/api/traces",
-				JaegerCollectorUserName: "username",
-				JaegerCollectorPassword: "password",
+				jaegerEnabled:           true,
+				jaegerCollectorEndpoint: "http://localhost:14268/api/traces",
+				jaegerCollectorUserName: "username",
+				jaegerCollectorPassword: "password",
 			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := tc.opts.withDefaults()
-			tracer, flush := newTracer(opts)
-			defer flush()
+			tracer, tracerCloser := initJaeger(tc.configs)
+			defer tracerCloser()
 
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, flush)
+			assert.NotNil(t, tracerCloser)
+		})
+	}
+}
+
+func TestInitOpenTelemetry(t *testing.T) {
+	tests := []struct {
+		name    string
+		configs configs
+	}{
+		{
+			name: "Insecure",
+			configs: configs{
+				name:                          "my-service",
+				opentelemetryEnabled:          true,
+				opentelemetryCollectorAddress: "localhost:55680",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			meter, tracer, meterCloser, tracerCloser := initOpenTelemetry(tc.configs)
+			defer meterCloser()
+			defer tracerCloser()
+
+			assert.NotNil(t, meter)
+			assert.NotNil(t, tracer)
+			assert.NotNil(t, meterCloser)
+			assert.NotNil(t, tracerCloser)
 		})
 	}
 }
@@ -235,15 +426,29 @@ func TestObserverClose(t *testing.T) {
 	tests := []struct {
 		name          string
 		observer      *observer
-		expectedError error
+		expectedError string
 	}{
 		{
 			name: "Success",
 			observer: &observer{
-				logger:      zap.NewNop(),
-				tracerFlush: func() {},
+				closers: []closer{
+					func() error {
+						return nil
+					},
+				},
 			},
-			expectedError: nil,
+			expectedError: "",
+		},
+		{
+			name: "Fail",
+			observer: &observer{
+				closers: []closer{
+					func() error {
+						return errors.New("error on closing")
+					},
+				},
+			},
+			expectedError: "error on closing",
 		},
 	}
 
@@ -251,7 +456,11 @@ func TestObserverClose(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.observer.Close()
 
-			assert.Equal(t, tc.expectedError, err)
+			if tc.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Contains(t, err.Error(), tc.expectedError)
+			}
 		})
 	}
 }
@@ -452,7 +661,7 @@ func TestObserverServeHTTP(t *testing.T) {
 		{
 			name: "OK",
 			observer: &observer{
-				metricHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				promHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 				}),
 			},

@@ -17,17 +17,14 @@ const port = ":9001"
 
 func main() {
 	// Creating a new Observer and set it as the singleton
-	obsv := observer.New(true, observer.Options{
-		Name:        "service-a",
-		Version:     "0.1.0",
-		Environment: "production",
-		Region:      "ca-central-1",
-		Tags: map[string]string{
+	obsv := observer.New(true,
+		observer.WithMetadata("client", "0.1.0", "production", "ca-central-1", map[string]string{
 			"domain": "auth",
-		},
-		LogLevel:            "info",
-		JaegerAgentEndpoint: "localhost:6831",
-	})
+		}),
+		observer.WithLogger("info"),
+		observer.WithPrometheus(),
+		observer.WithJaeger("localhost:6831", "", "", ""),
+	)
 	defer obsv.Close()
 
 	c := &http.Client{
