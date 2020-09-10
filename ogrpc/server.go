@@ -23,9 +23,10 @@ import (
 
 // Server-side instruments for metrics.
 type serverInstruments struct {
-	reqCounter  metric.Int64Counter
-	reqGauge    metric.Int64UpDownCounter
-	reqDuration metric.Int64ValueRecorder
+	reqCounter   metric.Int64Counter
+	reqGauge     metric.Int64UpDownCounter
+	reqDuration  metric.Int64ValueRecorder
+	panicCounter metric.Int64Counter
 }
 
 func newServerInstruments(meter metric.Meter) *serverInstruments {
@@ -48,6 +49,12 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 			"incoming_grpc_requests_duration",
 			metric.WithDescription("The duration of incoming grpc requests in milliseconds (server-side)"),
 			metric.WithUnit(unit.Milliseconds),
+			metric.WithInstrumentationName(libraryName),
+		),
+		panicCounter: mm.NewInt64Counter(
+			"handler_panics_total",
+			metric.WithDescription("The total number of panics that happened in grpc handlers (server-side)"),
+			metric.WithUnit(unit.Dimensionless),
 			metric.WithInstrumentationName(libraryName),
 		),
 	}
@@ -73,6 +80,8 @@ func NewServerInterceptor(observer observer.Observer, opts Options) *ServerInter
 }
 
 // ServerOptions return grpc server options for unary and stream interceptors.
+// This can be used for making gRPC method handlers observable via logging, metrics, tracing, etc.
+// It also observes and recovers panics that happened inside the method handlers.
 func (i *ServerInterceptor) ServerOptions() []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.UnaryInterceptor(i.unaryInterceptor),
@@ -80,27 +89,48 @@ func (i *ServerInterceptor) ServerOptions() []grpc.ServerOption {
 	}
 }
 
+func (i *ServerInterceptor) callUnaryHandler(handler grpc.UnaryHandler, ctx context.Context, req interface{}) (resp interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred: %v", r)
+			i.observer.Logger().Error("Panic occurred.", zap.Error(err))
+			i.instruments.panicCounter.Add(context.Background(), 1)
+		}
+	}()
+
+	resp, err = handler(ctx, req)
+
+	return resp, err
+}
+
 func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	startTime := time.Now()
-
 	kind := "server"
 	stream := false
 
 	// Get the package, service, and method name for the request
 	e, ok := parseEndpoint(info.FullMethod)
 	if !ok {
-		return handler(ctx, req)
+		return i.callUnaryHandler(handler, ctx, req)
 	}
 
 	// Check excluded methods
 	for _, m := range i.opts.ExcludedMethods {
 		if e.Method == m {
-			return handler(ctx, req)
+			return i.callUnaryHandler(handler, ctx, req)
 		}
 	}
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+	)
+
+	// Make sure we decrease the number of in-flight requests
+	i.instruments.reqGauge.Add(ctx, -1,
 		label.String("package", e.Package),
 		label.String("service", e.Service),
 		label.String("method", e.Method),
@@ -177,7 +207,7 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 
 	// Call gRPC method handler
 	span.AddEvent(ctx, "calling grpc method handler")
-	res, err := handler(ctx, req)
+	res, err := i.callUnaryHandler(handler, ctx, req)
 
 	duration := time.Since(startTime).Milliseconds()
 	success := err == nil
@@ -216,14 +246,6 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 		logger.Error(message, fields...)
 	}
 
-	// Decrease the number of in-flight requests
-	i.instruments.reqGauge.Add(ctx, -1,
-		label.String("package", e.Package),
-		label.String("service", e.Service),
-		label.String("method", e.Method),
-		label.Bool("stream", stream),
-	)
-
 	// Report the span
 	span.SetAttributes(
 		label.String("package", e.Package),
@@ -240,9 +262,22 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 	return res, err
 }
 
+func (i *ServerInterceptor) callStreamHandler(handler grpc.StreamHandler, srv interface{}, stream grpc.ServerStream) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic occurred: %v", r)
+			i.observer.Logger().Error("Panic occurred.", zap.Error(err))
+			i.instruments.panicCounter.Add(context.Background(), 1)
+		}
+	}()
+
+	err = handler(srv, stream)
+
+	return err
+}
+
 func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	startTime := time.Now()
-
 	ctx := ss.Context()
 	kind := "server"
 	stream := true
@@ -250,18 +285,26 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	// Get the package, service, and method name for the request
 	e, ok := parseEndpoint(info.FullMethod)
 	if !ok {
-		return handler(srv, ss)
+		return i.callStreamHandler(handler, srv, ss)
 	}
 
 	// Check excluded methods
 	for _, m := range i.opts.ExcludedMethods {
 		if e.Method == m {
-			return handler(srv, ss)
+			return i.callStreamHandler(handler, srv, ss)
 		}
 	}
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+	)
+
+	// Make sure we decrease the number of in-flight requests
+	i.instruments.reqGauge.Add(ctx, -1,
 		label.String("package", e.Package),
 		label.String("service", e.Service),
 		label.String("method", e.Method),
@@ -335,7 +378,7 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 
 	// Call gRPC method handler
 	span.AddEvent(ctx, "calling grpc method handler")
-	err := handler(srv, ss)
+	err := i.callStreamHandler(handler, srv, ss)
 
 	duration := time.Since(startTime).Milliseconds()
 	success := err == nil
@@ -373,14 +416,6 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	} else {
 		logger.Error(message, fields...)
 	}
-
-	// Decrease the number of in-flight requests
-	i.instruments.reqGauge.Add(ctx, -1,
-		label.String("package", e.Package),
-		label.String("service", e.Service),
-		label.String("method", e.Method),
-		label.Bool("stream", stream),
-	)
 
 	// Report the span
 	span.SetAttributes(

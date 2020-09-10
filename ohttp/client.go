@@ -129,7 +129,6 @@ func (c *Client) PostForm(url string, data url.Values) (resp *http.Response, err
 // Do is the observable counterpart of standard http Client.Do.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	startTime := time.Now()
-
 	ctx := req.Context()
 	kind := "client"
 	method := req.Method
@@ -138,6 +137,12 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 
 	// Increase the number of in-flight requests
 	c.instruments.reqGauge.Add(ctx, 1,
+		label.String("method", method),
+		label.String("route", route),
+	)
+
+	// Make sure we decrease the number of in-flight requests
+	c.instruments.reqGauge.Add(ctx, -1,
 		label.String("method", method),
 		label.String("route", route),
 	)
@@ -225,12 +230,6 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 			logger.Info(message, fields...)
 		}
 	}
-
-	// Decrease the number of in-flight requests
-	c.instruments.reqGauge.Add(ctx, -1,
-		label.String("method", method),
-		label.String("route", route),
-	)
 
 	// Report the span
 	span.SetAttributes(

@@ -73,6 +73,7 @@ func NewClientInterceptor(observer observer.Observer, opts Options) *ClientInter
 }
 
 // DialOptions return grpc dial options for unary and stream interceptors.
+// This can be used for making gRPC method calls observable via logging, metrics, tracing, etc.
 func (i *ClientInterceptor) DialOptions() []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithUnaryInterceptor(i.unaryInterceptor),
@@ -82,7 +83,6 @@ func (i *ClientInterceptor) DialOptions() []grpc.DialOption {
 
 func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod string, req, res interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 	startTime := time.Now()
-
 	kind := "client"
 	stream := false
 
@@ -101,6 +101,14 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+	)
+
+	// Make sure we decrease the number of in-flight requests
+	i.instruments.reqGauge.Add(ctx, -1,
 		label.String("package", e.Package),
 		label.String("service", e.Service),
 		label.String("method", e.Method),
@@ -192,14 +200,6 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 		logger.Error(message, fields...)
 	}
 
-	// Decrease the number of in-flight requests
-	i.instruments.reqGauge.Add(ctx, -1,
-		label.String("package", e.Package),
-		label.String("service", e.Service),
-		label.String("method", e.Method),
-		label.Bool("stream", stream),
-	)
-
 	// Report the span
 	span.SetAttributes(
 		label.String("package", e.Package),
@@ -218,7 +218,6 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 
 func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, fullMethod string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	startTime := time.Now()
-
 	kind := "client"
 	stream := true
 
@@ -237,6 +236,14 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 
 	// Increase the number of in-flight requests
 	i.instruments.reqGauge.Add(ctx, 1,
+		label.String("package", e.Package),
+		label.String("service", e.Service),
+		label.String("method", e.Method),
+		label.Bool("stream", stream),
+	)
+
+	// Make sure we decrease the number of in-flight requests
+	i.instruments.reqGauge.Add(ctx, -1,
 		label.String("package", e.Package),
 		label.String("service", e.Service),
 		label.String("method", e.Method),
@@ -328,14 +335,6 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	} else {
 		logger.Error(message, fields...)
 	}
-
-	// Decrease the number of in-flight requests
-	i.instruments.reqGauge.Add(ctx, -1,
-		label.String("package", e.Package),
-		label.String("service", e.Service),
-		label.String("method", e.Method),
-		label.Bool("stream", stream),
-	)
 
 	// Report the span
 	span.SetAttributes(
