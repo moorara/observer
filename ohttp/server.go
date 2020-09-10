@@ -1,6 +1,7 @@
 package ohttp
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -19,9 +20,10 @@ import (
 
 // Server-side instruments for metrics.
 type serverInstruments struct {
-	reqCounter  metric.Int64Counter
-	reqGauge    metric.Int64UpDownCounter
-	reqDuration metric.Int64ValueRecorder
+	reqCounter   metric.Int64Counter
+	reqGauge     metric.Int64UpDownCounter
+	reqDuration  metric.Int64ValueRecorder
+	panicCounter metric.Int64Counter
 }
 
 func newServerInstruments(meter metric.Meter) *serverInstruments {
@@ -46,6 +48,12 @@ func newServerInstruments(meter metric.Meter) *serverInstruments {
 			metric.WithUnit(unit.Milliseconds),
 			metric.WithInstrumentationName(libraryName),
 		),
+		panicCounter: mm.NewInt64Counter(
+			"handler_panics_total",
+			metric.WithDescription("The total number of panics that happened in http handlers (server-side)"),
+			metric.WithUnit(unit.Dimensionless),
+			metric.WithInstrumentationName(libraryName),
+		),
 	}
 }
 
@@ -68,12 +76,25 @@ func NewMiddleware(observer observer.Observer, opts Options) *Middleware {
 	}
 }
 
+func (m *Middleware) callHandlerFunc(handler http.HandlerFunc, w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Errorf("critical error: %v", r)
+			m.observer.Logger().Error("Panic occurred.", zap.Error(err))
+			m.instruments.panicCounter.Add(context.Background(), 1)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}()
+
+	handler(w, r)
+}
+
 // Wrap wraps an existing http handler function and returns a new observable handler function.
 // This can be used for making http handlers observable via logging, metrics, tracing, etc.
+// It also observes and recovers panics that happened inside the inner http handler.
 func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
-
 		ctx := r.Context()
 		kind := "server"
 		method := r.Method
@@ -82,6 +103,12 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 
 		// Increase the number of in-flight requests
 		m.instruments.reqGauge.Add(ctx, 1,
+			label.String("method", method),
+			label.String("route", route),
+		)
+
+		// Make sure we decrease the number of in-flight requests
+		defer m.instruments.reqGauge.Add(ctx, -1,
 			label.String("method", method),
 			label.String("route", route),
 		)
@@ -144,7 +171,7 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 
 		// Call http handler
 		span.AddEvent(ctx, "calling http handler")
-		next(rw, req)
+		m.callHandlerFunc(next, rw, req)
 
 		duration := time.Since(startTime).Milliseconds()
 		statusCode := rw.StatusCode
@@ -185,12 +212,6 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 				logger.Info(message, fields...)
 			}
 		}
-
-		// Decrease the number of in-flight requests
-		m.instruments.reqGauge.Add(ctx, -1,
-			label.String("method", method),
-			label.String("route", route),
-		)
 
 		// Report the span
 		span.SetAttributes(

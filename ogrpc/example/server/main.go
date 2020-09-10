@@ -20,6 +20,40 @@ const (
 	httpPort = ":9001"
 )
 
+func main() {
+	// Creating a new Observer and set it as the singleton
+	obsv := observer.New(true,
+		observer.WithMetadata("server", "0.1.0", "production", "ca-central-1", map[string]string{
+			"domain": "core",
+		}),
+		observer.WithLogger("info"),
+		observer.WithPrometheus(),
+		observer.WithJaeger("localhost:6831", "", "", ""),
+	)
+	defer obsv.Close()
+
+	si := ogrpc.NewServerInterceptor(obsv, ogrpc.Options{})
+
+	opts := si.ServerOptions()
+	server := grpc.NewServer(opts...)
+	zonePB.RegisterZoneManagerServer(server, &ZoneServer{})
+
+	// Start HTTP server for exposing metrics
+	go func() {
+		http.Handle("/metrics", obsv)
+		obsv.Logger().Info("starting http server on ...", zap.String("port", httpPort))
+		panic(http.ListenAndServe(httpPort, nil))
+	}()
+
+	conn, err := net.Listen("tcp", grpcPort)
+	if err != nil {
+		panic(err)
+	}
+
+	obsv.Logger().Info("starting grpc server on ...", zap.String("port", grpcPort))
+	panic(server.Serve(conn))
+}
+
 // ZoneServer is an implementation of zonePB.ZoneManagerServer
 type ZoneServer struct{}
 
@@ -172,38 +206,4 @@ func (s *ZoneServer) GetUsersInZones(stream zonePB.ZoneManager_GetUsersInZonesSe
 			return err
 		}
 	}
-}
-
-func main() {
-	// Creating a new Observer and set it as the singleton
-	obsv := observer.New(true,
-		observer.WithMetadata("server", "0.1.0", "production", "ca-central-1", map[string]string{
-			"domain": "core",
-		}),
-		observer.WithLogger("info"),
-		observer.WithPrometheus(),
-		observer.WithJaeger("localhost:6831", "", "", ""),
-	)
-	defer obsv.Close()
-
-	si := ogrpc.NewServerInterceptor(obsv, ogrpc.Options{})
-
-	opts := si.ServerOptions()
-	server := grpc.NewServer(opts...)
-	zonePB.RegisterZoneManagerServer(server, &ZoneServer{})
-
-	// Start HTTP server for exposing metrics
-	go func() {
-		http.Handle("/metrics", obsv)
-		obsv.Logger().Info("starting http server on ...", zap.String("port", httpPort))
-		panic(http.ListenAndServe(httpPort, nil))
-	}()
-
-	conn, err := net.Listen("tcp", grpcPort)
-	if err != nil {
-		panic(err)
-	}
-
-	obsv.Logger().Info("starting grpc server on ...", zap.String("port", grpcPort))
-	panic(server.Serve(conn))
 }

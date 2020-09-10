@@ -16,13 +16,24 @@ func TestMiddleware(t *testing.T) {
 		method              string
 		url                 string
 		header              http.Header
-		mockStatusCode      int
+		next                http.HandlerFunc
 		expectedMethod      string
 		expectedURL         string
 		expectedRoute       string
 		expectedStatusCode  int
 		expectedStatusClass string
 	}{
+		{
+			name:   "HandlerPanics",
+			opts:   Options{},
+			method: "GET",
+			url:    "/v1/items/00000000-0000-0000-0000-000000000000",
+			header: http.Header{},
+			next: func(w http.ResponseWriter, r *http.Request) {
+				panic("something went wrong!")
+			},
+			expectedStatusCode: 500,
+		},
 		{
 			name:   "Success",
 			opts:   Options{},
@@ -31,7 +42,10 @@ func TestMiddleware(t *testing.T) {
 			header: http.Header{
 				clientNameHeader: []string{"test-client"},
 			},
-			mockStatusCode:      200,
+			next: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+			},
 			expectedMethod:      "GET",
 			expectedURL:         "/v1/items/00000000-0000-0000-0000-000000000000",
 			expectedRoute:       "/v1/items/:id",
@@ -46,7 +60,10 @@ func TestMiddleware(t *testing.T) {
 			header: http.Header{
 				clientNameHeader: []string{"test-client"},
 			},
-			mockStatusCode:      400,
+			next: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Millisecond)
+				w.WriteHeader(http.StatusBadRequest)
+			},
 			expectedMethod:      "GET",
 			expectedURL:         "/v1/items/00000000-0000-0000-0000-000000000000",
 			expectedRoute:       "/v1/items/:id",
@@ -61,7 +78,10 @@ func TestMiddleware(t *testing.T) {
 			header: http.Header{
 				clientNameHeader: []string{"test-client"},
 			},
-			mockStatusCode:      500,
+			next: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Millisecond)
+				w.WriteHeader(http.StatusInternalServerError)
+			},
 			expectedMethod:      "GET",
 			expectedURL:         "/v1/items/00000000-0000-0000-0000-000000000000",
 			expectedRoute:       "/v1/items/:id",
@@ -78,7 +98,10 @@ func TestMiddleware(t *testing.T) {
 			header: http.Header{
 				clientNameHeader: []string{"test-client"},
 			},
-			mockStatusCode:      200,
+			next: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+			},
 			expectedMethod:      "GET",
 			expectedURL:         "/v1/items/00000000-0000-0000-0000-000000000000",
 			expectedRoute:       "/v1/items/:id",
@@ -94,7 +117,10 @@ func TestMiddleware(t *testing.T) {
 				requestUUIDHeader: []string{"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},
 				clientNameHeader:  []string{"test-client"},
 			},
-			mockStatusCode:      200,
+			next: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Millisecond)
+				w.WriteHeader(http.StatusOK)
+			},
 			expectedMethod:      "GET",
 			expectedURL:         "/v1/items/00000000-0000-0000-0000-000000000000",
 			expectedRoute:       "/v1/items/:id",
@@ -110,10 +136,7 @@ func TestMiddleware(t *testing.T) {
 			assert.NotNil(t, mid)
 
 			// http handler for testing
-			handler := mid.Wrap(func(w http.ResponseWriter, r *http.Request) {
-				time.Sleep(2 * time.Millisecond)
-				w.WriteHeader(tc.mockStatusCode)
-			})
+			handler := mid.Wrap(tc.next)
 
 			// Create an http request
 			request := httptest.NewRequest(tc.method, tc.url, nil)
