@@ -1,6 +1,21 @@
 # Changelog
 
-## [v0.3.0](https://github.com/moorara/observer/tree/v0.3.0) (2020-08-29)
+## [v0.3.1](https://github.com/moorara/observer/tree/v0.3.1) (2020-09-10)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.3.0...v0.3.1)
+
+**Fixed bugs:**
+
+- Fix the bug for reporting number of in-flight requests [\#58](https://github.com/moorara/observer/issues/58)
+
+**Merged pull requests:**
+
+- Recovering and reporting panics from handlers [\#59](https://github.com/moorara/observer/pull/59) ([moorara](https://github.com/moorara))
+- Update module google.golang.org/grpc to v1.32.0 [\#57](https://github.com/moorara/observer/pull/57) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module go.uber.org/zap to v1.16.0 [\#56](https://github.com/moorara/observer/pull/56) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module google/uuid to v1.1.2 [\#55](https://github.com/moorara/observer/pull/55) ([renovate[bot]](https://github.com/apps/renovate))
+
+## [v0.3.0](https://github.com/moorara/observer/tree/v0.3.0) (2020-08-30)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.2.3...v0.3.0)
 
@@ -24,6 +39,7 @@
 
 - Update repo [\#45](https://github.com/moorara/observer/pull/45) ([moorara](https://github.com/moorara))
 - Update module google.golang.org/grpc to v1.31.0 [\#44](https://github.com/moorara/observer/pull/44) ([renovate[bot]](https://github.com/apps/renovate))
+- Update module go.opentelemetry.io/otel to v0.9.0 [\#42](https://github.com/moorara/observer/pull/42) ([renovate[bot]](https://github.com/apps/renovate))
 - Update module go.opentelemetry.io/otel to v0.8.0 [\#41](https://github.com/moorara/observer/pull/41) ([renovate[bot]](https://github.com/apps/renovate))
 
 ## [v0.2.2](https://github.com/moorara/observer/tree/v0.2.2) (2020-07-03)
@@ -32,7 +48,6 @@
 
 **Merged pull requests:**
 
-- Update module go.opentelemetry.io/otel to v0.9.0 [\#42](https://github.com/moorara/observer/pull/42) ([renovate[bot]](https://github.com/apps/renovate))
 - Update OpenTelemetry module to v0.7.0 [\#40](https://github.com/moorara/observer/pull/40) ([moorara](https://github.com/moorara))
 - Update module google.golang.org/protobuf to v1.25.0 [\#38](https://github.com/moorara/observer/pull/38) ([renovate[bot]](https://github.com/apps/renovate))
 - Update module prometheus/client\_golang to v1.7.1 [\#37](https://github.com/moorara/observer/pull/37) ([renovate[bot]](https://github.com/apps/renovate))
