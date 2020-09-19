@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.3.2](https://github.com/moorara/observer/tree/v0.3.2) (2020-09-19)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.3.1...v0.3.2)
+
+**Fixed bugs:**
+
+- Create noop logger, meter, and tracer by default [\#60](https://github.com/moorara/observer/issues/60)
+
+**Merged pull requests:**
+
+- Fix the bug related to nil logger, meter, and tracer [\#61](https://github.com/moorara/observer/pull/61) ([moorara](https://github.com/moorara))
+
 ## [v0.3.1](https://github.com/moorara/observer/tree/v0.3.1) (2020-09-10)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.3.0...v0.3.1)
