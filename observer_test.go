@@ -241,6 +241,9 @@ func TestNew(t *testing.T) {
 			observer := New(tc.setAsSingleton, tc.opts...)
 
 			assert.NotNil(t, observer)
+			assert.NotNil(t, observer.Logger())
+			assert.NotNil(t, observer.Meter())
+			assert.NotNil(t, observer.Tracer())
 		})
 	}
 }
@@ -639,7 +642,7 @@ func TestObserverTracer(t *testing.T) {
 		{
 			name: "OK",
 			observer: &observer{
-				tracer: &trace.NoopTracer{},
+				tracer: new(trace.NoopProvider).Tracer("Noop"),
 			},
 		},
 	}

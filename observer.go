@@ -266,6 +266,29 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 		o.closers = append(o.closers, meterCloser, tracerCloser)
 	}
 
+	// Create noop logger, meter, and/or tracer if they are not created so far
+
+	if o.logger == nil {
+		o.logger = zap.NewNop()
+	}
+
+	if o.loggerConfig == nil {
+		o.loggerConfig = &zap.Config{}
+	}
+
+	if o.meter == (metric.Meter{}) {
+		o.meter = new(metric.NoopProvider).Meter("Noop")
+	}
+
+	if o.promHandler == nil {
+		o.promHandler = http.NotFoundHandler()
+	}
+
+	if o.tracer == nil {
+		o.tracer = new(trace.NoopProvider).Tracer("Noop")
+	}
+
+	// Assign the new observer to the singleton observer
 	if setAsSingleton {
 		singleton = o
 	}
@@ -520,14 +543,12 @@ var singleton *observer
 // Initialize the singleton observer with a no-op observer.
 // init function will be only called once in runtime regardless of how many times the package is imported.
 func init() {
-	mp := metric.NoopProvider{}
-	tp := trace.NoopProvider{}
-
 	singleton = &observer{
 		logger:       zap.NewNop(),
 		loggerConfig: &zap.Config{},
-		meter:        mp.Meter("Noop"),
-		tracer:       tp.Tracer("Noop"),
+		meter:        new(metric.NoopProvider).Meter("Noop"),
+		promHandler:  http.NotFoundHandler(),
+		tracer:       new(trace.NoopProvider).Tracer("Noop"),
 	}
 }
 
