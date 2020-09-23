@@ -123,6 +123,10 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 		// Get the name of client for the request if any
 		clientName := r.Header.Get(clientNameHeader)
 
+		// Propagate request metadata by adding them to outgoing http response headers
+		w.Header().Set(requestUUIDHeader, requestUUID)
+		w.Header().Set(clientNameHeader, clientName)
+
 		// Extract correlation context from the http headers
 		ctx = propagation.ExtractHTTP(ctx, global.Propagators(), r.Header)
 

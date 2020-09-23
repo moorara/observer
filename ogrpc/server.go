@@ -162,6 +162,13 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 		clientName = vals[0]
 	}
 
+	// Propagate request metadata by adding them to outgoing grpc response metadata
+	header := metadata.New(map[string]string{
+		requestUUIDKey: requestUUID,
+		clientNameKey:  clientName,
+	})
+	_ = grpc.SendHeader(ctx, header)
+
 	// Extract correlation context from the grpc metadata
 	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 
@@ -331,6 +338,13 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	if vals := md.Get(clientNameKey); len(vals) > 0 {
 		clientName = vals[0]
 	}
+
+	// Propagate request metadata by adding them to outgoing grpc response metadata
+	header := metadata.New(map[string]string{
+		requestUUIDKey: requestUUID,
+		clientNameKey:  clientName,
+	})
+	_ = ss.SendHeader(header)
 
 	// Extract correlation context from the grpc metadata
 	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})

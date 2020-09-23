@@ -153,7 +153,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		requestUUID = uuid.New().String()
 	}
 
-	// Propagate http request headers
+	// Propagate request metadata by adding them to outgoing http request headers
 	req.Header.Set(requestUUIDHeader, requestUUID)
 	req.Header.Set(clientNameHeader, c.observer.Name())
 

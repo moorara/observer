@@ -129,9 +129,10 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 		md = metadata.New(nil)
 	}
 
-	// Propagate grpc request metadata
+	// Propagate request metadata by adding them to outgoing grpc request metadata
 	md.Set(requestUUIDKey, requestUUID)
 	md.Set(clientNameKey, i.observer.Name())
+	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Create a new correlation context
 	ctx = correlation.NewContext(ctx,
@@ -264,7 +265,7 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 		md = metadata.New(nil)
 	}
 
-	// Propagate grpc request metadata
+	// Propagate request metadata by adding them to outgoing grpc request metadata
 	md.Set(requestUUIDKey, requestUUID)
 	md.Set(clientNameKey, i.observer.Name())
 	ctx = metadata.NewOutgoingContext(ctx, md)
