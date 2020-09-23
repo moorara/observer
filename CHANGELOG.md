@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.3.3](https://github.com/moorara/observer/tree/v0.3.3) (2020-09-23)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.3.2...v0.3.3)
+
+**Closed issues:**
+
+- Add RequestID to response header/metadata [\#62](https://github.com/moorara/observer/issues/62)
+
+**Merged pull requests:**
+
+- Add request id and client name to response headers [\#63](https://github.com/moorara/observer/pull/63) ([moorara](https://github.com/moorara))
+
 ## [v0.3.2](https://github.com/moorara/observer/tree/v0.3.2) (2020-09-19)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.3.1...v0.3.2)
