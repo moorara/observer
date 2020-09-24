@@ -9,7 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.7.1
 	github.com/stretchr/testify v1.6.1
 	go.opentelemetry.io/otel v0.11.0
-	go.opentelemetry.io/otel/exporters/metric/prometheus v0.11.0
+	go.opentelemetry.io/otel/exporters/metric/prometheus v0.12.0
 	go.opentelemetry.io/otel/exporters/otlp v0.11.0
 	go.opentelemetry.io/otel/exporters/trace/jaeger v0.11.0
 	go.opentelemetry.io/otel/sdk v0.11.0
