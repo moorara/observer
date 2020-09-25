@@ -22,18 +22,15 @@ type mockObserver struct {
 }
 
 func newMockObserver() *mockObserver {
-	mp := metric.NoopProvider{}
-	tp := trace.NoopProvider{}
-
 	return &mockObserver{
 		name:   "test",
 		logger: zap.NewNop(),
-		meter:  mp.Meter("Noop"),
-		tracer: tp.Tracer("Noop"),
+		meter:  new(metric.NoopMeterProvider).Meter(""),
+		tracer: trace.NoopTracerProvider().Tracer(""),
 	}
 }
 
-func (m *mockObserver) Close() error {
+func (m *mockObserver) End(ctx context.Context) error {
 	return nil
 }
 

@@ -6,6 +6,7 @@
 package observer
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strconv"
@@ -34,6 +35,43 @@ import (
 	jaegerexporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
+
+type closeFunc func() error
+
+type endFunc func(context.Context) error
+
+func endFuncFromFunc(fn func()) endFunc {
+	return func(ctx context.Context) error {
+		done := make(chan struct{}, 1)
+		go func() {
+			fn()
+			done <- struct{}{}
+		}()
+
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func endFuncFromCloseFunc(close closeFunc) endFunc {
+	return func(ctx context.Context) error {
+		done := make(chan error, 1)
+		go func() {
+			done <- close()
+		}()
+
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
 
 // configs is used for configuring and creating an observer.
 type configs struct {
@@ -194,8 +232,8 @@ func WithOpenTelemetry(collectorAddress string, collectorCredentials credentials
 
 // Observer provides logging, metrics, and tracing capabilities for observability.
 type Observer interface {
-	// Close implements io.Closer interface. It flushes the logger, meter, and tracer.
-	Close() error
+	// End flushes and closes the logger, meter, and tracer.
+	End(context.Context) error
 
 	// Name is returns the name of the observer.
 	Name() string
@@ -219,8 +257,6 @@ type Observer interface {
 	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
-type closer func() error
-
 type observer struct {
 	name         string
 	logger       *zap.Logger
@@ -228,7 +264,7 @@ type observer struct {
 	meter        metric.Meter
 	promHandler  http.Handler
 	tracer       trace.Tracer
-	closers      []closer
+	endFuncs     []endFunc
 }
 
 // New creates a new observer.
@@ -241,13 +277,15 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	o := &observer{
-		name:    c.name,
-		closers: []closer{},
+		name:     c.name,
+		endFuncs: []endFunc{},
 	}
 
 	if c.loggerEnabled {
 		o.logger, o.loggerConfig = initLogger(c)
-		o.closers = append(o.closers, o.logger.Sync)
+		o.endFuncs = append(o.endFuncs,
+			endFuncFromCloseFunc(o.logger.Sync),
+		)
 	}
 
 	if c.prometheusEnabled {
@@ -255,15 +293,15 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	if c.jaegerEnabled {
-		var tracerCloser closer
-		o.tracer, tracerCloser = initJaeger(c)
-		o.closers = append(o.closers, tracerCloser)
+		var tracerEnd endFunc
+		o.tracer, tracerEnd = initJaeger(c)
+		o.endFuncs = append(o.endFuncs, tracerEnd)
 	}
 
 	if c.opentelemetryEnabled {
-		var meterCloser, tracerCloser closer
-		o.meter, o.tracer, meterCloser, tracerCloser = initOpenTelemetry(c)
-		o.closers = append(o.closers, meterCloser, tracerCloser)
+		var meterEnd, tracerEnd endFunc
+		o.meter, o.tracer, meterEnd, tracerEnd = initOpenTelemetry(c)
+		o.endFuncs = append(o.endFuncs, meterEnd, tracerEnd)
 	}
 
 	// Create noop logger, meter, and/or tracer if they are not created so far
@@ -277,7 +315,7 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	if o.meter == (metric.Meter{}) {
-		o.meter = new(metric.NoopProvider).Meter("Noop")
+		o.meter = new(metric.NoopMeterProvider).Meter("")
 	}
 
 	if o.promHandler == nil {
@@ -285,7 +323,7 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	if o.tracer == nil {
-		o.tracer = new(trace.NoopProvider).Tracer("Noop")
+		o.tracer = trace.NoopTracerProvider().Tracer("")
 	}
 
 	// Assign the new observer to the singleton observer
@@ -382,13 +420,13 @@ func initPrometheus(c configs) (metric.Meter, http.Handler) {
 		panic(err)
 	}
 
-	global.SetMeterProvider(exporter.Provider())
-	meter := exporter.Provider().Meter(c.name)
+	global.SetMeterProvider(exporter.MeterProvider())
+	meter := exporter.MeterProvider().Meter(c.name)
 
 	return meter, exporter
 }
 
-func initJaeger(c configs) (trace.Tracer, closer) {
+func initJaeger(c configs) (trace.Tracer, endFunc) {
 	var endpointOpt jaegerexporter.EndpointOption
 	switch {
 	case c.jaegerAgentEndpoint != "":
@@ -424,18 +462,13 @@ func initJaeger(c configs) (trace.Tracer, closer) {
 		panic(err)
 	}
 
-	closer := func() error {
-		flush()
-		return nil
-	}
+	global.SetTracerProvider(provider)
+	tracer := global.TracerProvider().Tracer(c.name)
 
-	global.SetTraceProvider(provider)
-	tracer := global.TraceProvider().Tracer(c.name)
-
-	return tracer, closer
+	return tracer, endFuncFromFunc(flush)
 }
 
-func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, closer, closer) {
+func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc) {
 	// Exporter
 
 	expOpts := []otlpexporter.ExporterOption{
@@ -454,7 +487,7 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, closer, closer) {
 
 	// Trace Provider
 
-	prvOpts := []tracesdk.ProviderOption{
+	tpOpts := []tracesdk.TracerProviderOption{
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithConfig(tracesdk.Config{
 			DefaultSampler: tracesdk.AlwaysSample(),
@@ -464,10 +497,7 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, closer, closer) {
 		)),
 	}
 
-	traceProvider, err := tracesdk.NewProvider(prvOpts...)
-	if err != nil {
-		panic(err)
-	}
+	traceProvider := tracesdk.NewTracerProvider(tpOpts...)
 
 	// Meter Provider
 
@@ -480,27 +510,20 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, closer, closer) {
 	pusher := push.New(checkpointer, exporter, pushOpts...)
 
 	// Set global providers
-	global.SetTraceProvider(traceProvider)
-	global.SetMeterProvider(pusher.Provider())
+	global.SetTracerProvider(traceProvider)
+	global.SetMeterProvider(pusher.MeterProvider())
 	pusher.Start()
 
 	meter := global.MeterProvider().Meter(c.name)
-	tracer := global.TraceProvider().Tracer(c.name)
+	tracer := global.TracerProvider().Tracer(c.name)
 
-	meterCloser := func() error {
-		pusher.Stop()
-		return nil
-	}
-
-	tracerCloser := exporter.Stop
-
-	return meter, tracer, meterCloser, tracerCloser
+	return meter, tracer, endFuncFromFunc(pusher.Stop), exporter.Shutdown
 }
 
-func (o *observer) Close() error {
+func (o *observer) End(ctx context.Context) error {
 	var err error
-	for _, close := range o.closers {
-		if e := close(); e != nil {
+	for _, endFunc := range o.endFuncs {
+		if e := endFunc(ctx); e != nil {
 			err = multierror.Append(err, e)
 		}
 	}
@@ -546,9 +569,9 @@ func init() {
 	singleton = &observer{
 		logger:       zap.NewNop(),
 		loggerConfig: &zap.Config{},
-		meter:        new(metric.NoopProvider).Meter("Noop"),
+		meter:        new(metric.NoopMeterProvider).Meter(""),
 		promHandler:  http.NotFoundHandler(),
-		tracer:       new(trace.NoopProvider).Tracer("Noop"),
+		tracer:       trace.NoopTracerProvider().Tracer(""),
 	}
 }
 

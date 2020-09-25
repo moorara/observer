@@ -14,7 +14,7 @@ obsv := observer.New(true,
   observer.WithMetadata("server", "", "", "", nil),
   observer.WithLogger("info"),
 )
-defer obsv.Close()
+defer obsv.End(context.Background())
 
 si := ogrpc.NewServerInterceptor(obsv, ogrpc.Options{})
 opts := si.ServerOptions()
@@ -29,7 +29,7 @@ obsv := observer.New(true,
   observer.WithMetadata("client", "", "", "", nil),
   observer.WithLogger("info"),
 )
-defer obsv.Close()
+defer obsv.End(context.Background())
 
 ci := ogrpc.NewClientInterceptor(obsv, ogrpc.Options{})
 opts := ci.DialOptions()

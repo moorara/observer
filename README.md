@@ -147,7 +147,7 @@ func main() {
     observer.WithPrometheus(),
     observer.WithJaeger("localhost:6831", "", "", ""),
   )
-  defer obsv.Close()
+  defer obsv.End(context.Background())
 
   srv := &server{
     observer:    obsv,
@@ -279,7 +279,7 @@ func main() {
     observer.WithLogger("info"),
     observer.WithOpenTelemetry("localhost:55680", nil),
   )
-  defer obsv.Close()
+  defer obsv.End(context.Background())
 
   srv := &server{
     observer:    obsv,
