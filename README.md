@@ -68,7 +68,7 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/correlation"
+  "go.opentelemetry.io/otel/api/baggage"
   "go.opentelemetry.io/otel/api/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
@@ -147,16 +147,16 @@ func main() {
     observer.WithPrometheus(),
     observer.WithJaeger("localhost:6831", "", "", ""),
   )
-  defer obsv.Close()
+  defer obsv.End(context.Background())
 
   srv := &server{
     observer:    obsv,
     instruments: newInstruments(obsv.Meter()),
   }
 
-  // Creating a correlation context
+  // Creating a context
   ctx := context.Background()
-  ctx = correlation.NewContext(ctx,
+  ctx = baggage.NewContext(ctx,
     label.String("tenant", "1234"),
   )
 
@@ -201,7 +201,7 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/correlation"
+  "go.opentelemetry.io/otel/api/baggage"
   "go.opentelemetry.io/otel/api/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
@@ -279,16 +279,16 @@ func main() {
     observer.WithLogger("info"),
     observer.WithOpenTelemetry("localhost:55680", nil),
   )
-  defer obsv.Close()
+  defer obsv.End(context.Background())
 
   srv := &server{
     observer:    obsv,
     instruments: newInstruments(obsv.Meter()),
   }
 
-  // Creating a correlation context
+  // Creating a context
   ctx := context.Background()
-  ctx = correlation.NewContext(ctx,
+  ctx = baggage.NewContext(ctx,
     label.String("tenant", "1234"),
   )
 

@@ -14,7 +14,7 @@ obsv := observer.New(true,
   observer.WithMetadata("server", "", "", "", nil),
   observer.WithLogger("info"),
 })
-defer obsv.Close()
+defer obsv.End(context.Background())
 
 mid := ohttp.NewMiddleware(obsv, ohttp.Options{})
 wrapped := mid.Wrap(handler)
@@ -27,7 +27,7 @@ obsv := observer.New(true,
   observer.WithMetadata("client", "", "", "", nil),
   observer.WithLogger("info"),
 })
-defer obsv.Close()
+defer obsv.End(context.Background())
 
 c := &http.Client{}
 client := ohttp.NewClient(c, obsv, ohttp.Options{})

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"time"
@@ -22,7 +23,7 @@ func main() {
 		observer.WithPrometheus(),
 		observer.WithJaeger("localhost:6831", "", "", ""),
 	)
-	defer obsv.Close()
+	defer obsv.End(context.Background())
 
 	mid := ohttp.NewMiddleware(obsv, ohttp.Options{})
 

@@ -1,6 +1,7 @@
 package observer
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,80 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+func TestNewEndFuncFromFunc(t *testing.T) {
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tests := []struct {
+		name          string
+		fn            func()
+		ctx           context.Context
+		expectedError string
+	}{
+		{
+			name:          "Successful",
+			fn:            func() {},
+			ctx:           context.Background(),
+			expectedError: "",
+		},
+		{
+			name:          "ContextCancelled",
+			fn:            func() {},
+			ctx:           cancelledCtx,
+			expectedError: "context canceled",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(T *testing.T) {
+			err := endFuncFromFunc(tc.fn)(tc.ctx)
+
+			if tc.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedError)
+			}
+		})
+	}
+}
+
+func TestNewEndFuncFromCloseFunc(t *testing.T) {
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tests := []struct {
+		name          string
+		close         closeFunc
+		ctx           context.Context
+		expectedError string
+	}{
+		{
+			name:          "Successful",
+			close:         func() error { return nil },
+			ctx:           context.Background(),
+			expectedError: "",
+		},
+		{
+			name:          "ContextCancelled",
+			close:         func() error { return nil },
+			ctx:           cancelledCtx,
+			expectedError: "context canceled",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(T *testing.T) {
+			err := endFuncFromCloseFunc(tc.close)(tc.ctx)
+
+			if tc.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedError)
+			}
+		})
+	}
+}
 
 func TestConfigsFromEnv(t *testing.T) {
 	type keyval struct {
@@ -387,11 +462,11 @@ func TestInitJaeger(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tracer, tracerCloser := initJaeger(tc.configs)
-			defer tracerCloser()
+			tracer, tracerEnd := initJaeger(tc.configs)
+			defer tracerEnd(context.Background())
 
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, tracerCloser)
+			assert.NotNil(t, tracerEnd)
 		})
 	}
 }
@@ -413,51 +488,54 @@ func TestInitOpenTelemetry(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			meter, tracer, meterCloser, tracerCloser := initOpenTelemetry(tc.configs)
-			defer meterCloser()
-			defer tracerCloser()
+			meter, tracer, meterEnd, tracerEnd := initOpenTelemetry(tc.configs)
+			defer meterEnd(context.Background())
+			defer tracerEnd(context.Background())
 
 			assert.NotNil(t, meter)
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, meterCloser)
-			assert.NotNil(t, tracerCloser)
+			assert.NotNil(t, meterEnd)
+			assert.NotNil(t, tracerEnd)
 		})
 	}
 }
 
-func TestObserverClose(t *testing.T) {
+func TestObserverEnd(t *testing.T) {
 	tests := []struct {
 		name          string
 		observer      *observer
+		ctx           context.Context
 		expectedError string
 	}{
 		{
 			name: "Success",
 			observer: &observer{
-				closers: []closer{
-					func() error {
+				endFuncs: []endFunc{
+					func(context.Context) error {
 						return nil
 					},
 				},
 			},
+			ctx:           context.Background(),
 			expectedError: "",
 		},
 		{
 			name: "Fail",
 			observer: &observer{
-				closers: []closer{
-					func() error {
+				endFuncs: []endFunc{
+					func(context.Context) error {
 						return errors.New("error on closing")
 					},
 				},
 			},
+			ctx:           context.Background(),
 			expectedError: "error on closing",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.observer.Close()
+			err := tc.observer.End(tc.ctx)
 
 			if tc.expectedError == "" {
 				assert.NoError(t, err)
@@ -622,7 +700,7 @@ func TestObserverMeter(t *testing.T) {
 		{
 			name: "OK",
 			observer: &observer{
-				meter: new(metric.NoopProvider).Meter("Noop"),
+				meter: new(metric.NoopMeterProvider).Meter(""),
 			},
 		},
 	}
@@ -642,7 +720,7 @@ func TestObserverTracer(t *testing.T) {
 		{
 			name: "OK",
 			observer: &observer{
-				tracer: new(trace.NoopProvider).Tracer("Noop"),
+				tracer: trace.NoopTracerProvider().Tracer(""),
 			},
 		},
 	}
