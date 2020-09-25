@@ -34,15 +34,15 @@ func main() {
 
 	client := ohttp.NewClient(c, obsv, ohttp.Options{})
 
-	req, err := http.NewRequest("GET", "http://localhost:9000/users/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", nil)
-	if err != nil {
-		panic(err)
-	}
-
 	ctx := context.Background()
 	ctx = baggage.NewContext(ctx,
 		label.String("tenant", "1234"),
 	)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://localhost:9000/users/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", nil)
+	if err != nil {
+		panic(err)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
