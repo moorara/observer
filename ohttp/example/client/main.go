@@ -8,7 +8,7 @@ import (
 
 	"github.com/moorara/observer"
 	"github.com/moorara/observer/ohttp"
-	"go.opentelemetry.io/otel/api/correlation"
+	"go.opentelemetry.io/otel/api/baggage"
 	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 )
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	ctx = correlation.NewContext(ctx,
+	ctx = baggage.NewContext(ctx,
 		label.String("tenant", "1234"),
 	)
 

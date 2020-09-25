@@ -8,13 +8,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/correlation"
+	"go.opentelemetry.io/otel/api/baggage"
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/api/unit"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 )
 
@@ -127,19 +127,19 @@ func (m *Middleware) Wrap(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set(requestUUIDHeader, requestUUID)
 		w.Header().Set(clientNameHeader, clientName)
 
-		// Extract correlation context from the http headers
+		// Extract context from the http headers
 		ctx = propagation.ExtractHTTP(ctx, global.Propagators(), r.Header)
 
 		// Get span context and propagated key-values
 		// spanContext := trace.RemoteSpanContextFromContext(ctx)
 		var keyvalues []label.KeyValue
-		correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+		baggage.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
 			keyvalues = append(keyvalues, kv)
 			return true
 		})
 
-		// Create a new correlation context
-		ctx = correlation.NewContext(ctx,
+		// Create a new context
+		ctx = baggage.NewContext(ctx,
 			label.String("req.uuid", requestUUID),
 		)
 

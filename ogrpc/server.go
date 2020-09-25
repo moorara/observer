@@ -7,14 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/correlation"
+	"go.opentelemetry.io/otel/api/baggage"
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/api/unit"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -169,19 +169,19 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 	})
 	_ = grpc.SendHeader(ctx, header)
 
-	// Extract correlation context from the grpc metadata
+	// Extract context from the grpc metadata
 	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 
 	// Get span context and propagated key-values
 	// spanContext := trace.RemoteSpanContextFromContext(ctx)
 	var keyvalues []label.KeyValue
-	correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+	baggage.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
 		keyvalues = append(keyvalues, kv)
 		return true
 	})
 
-	// Create a new correlation context
-	ctx = correlation.NewContext(ctx,
+	// Create a new context
+	ctx = baggage.NewContext(ctx,
 		label.String("req.uuid", requestUUID),
 	)
 
@@ -346,19 +346,19 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	})
 	_ = ss.SendHeader(header)
 
-	// Extract correlation context from the grpc metadata
+	// Extract context from the grpc metadata
 	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 
 	// Get span context and propagated key-values
 	// spanContext := trace.RemoteSpanContextFromContext(ctx)
 	var keyvalues []label.KeyValue
-	correlation.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
+	baggage.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
 		keyvalues = append(keyvalues, kv)
 		return true
 	})
 
-	// Create a new correlation context
-	ctx = correlation.NewContext(ctx,
+	// Create a new context
+	ctx = baggage.NewContext(ctx,
 		label.String("req.uuid", requestUUID),
 	)
 

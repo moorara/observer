@@ -7,14 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/correlation"
+	"go.opentelemetry.io/otel/api/baggage"
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/metric"
 	"go.opentelemetry.io/otel/api/propagation"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/api/unit"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -134,8 +134,8 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	md.Set(clientNameKey, i.observer.Name())
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	// Create a new correlation context
-	ctx = correlation.NewContext(ctx,
+	// Create a new context
+	ctx = baggage.NewContext(ctx,
 		label.String("req.uuid", requestUUID),
 		label.String("client.name", i.observer.Name()),
 	)
@@ -147,7 +147,7 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	)
 	defer span.End()
 
-	// Inject the correlation context and the span context into the grpc metadata
+	// Inject the context and the span context into the grpc metadata
 	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
@@ -270,8 +270,8 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	md.Set(clientNameKey, i.observer.Name())
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	// Create a new correlation context
-	ctx = correlation.NewContext(ctx,
+	// Create a new context
+	ctx = baggage.NewContext(ctx,
 		label.String("req.uuid", requestUUID),
 		label.String("client.name", i.observer.Name()),
 	)
@@ -283,7 +283,7 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	)
 	defer span.End()
 
-	// Inject the correlation context and the span context into the grpc metadata
+	// Inject the context and the span context into the grpc metadata
 	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
