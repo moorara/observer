@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.3.4](https://github.com/moorara/observer/tree/v0.3.4) (2020-09-25)
+
+[Full Changelog](https://github.com/moorara/observer/compare/v0.3.3...v0.3.4)
+
+**Merged pull requests:**
+
+- Update http client example [\#70](https://github.com/moorara/observer/pull/70) ([moorara](https://github.com/moorara))
+- Update OpenTelemetry modules to v0.12.0 [\#69](https://github.com/moorara/observer/pull/69) ([moorara](https://github.com/moorara))
+
 ## [v0.3.3](https://github.com/moorara/observer/tree/v0.3.3) (2020-09-23)
 
 [Full Changelog](https://github.com/moorara/observer/compare/v0.3.2...v0.3.3)
