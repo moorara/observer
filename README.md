@@ -397,7 +397,7 @@ _TBD_
 
 
 [godoc-url]: https://pkg.go.dev/github.com/moorara/observer
-[godoc-image]: https://godoc.org/github.com/moorara/observer?status.svg
+[godoc-image]: https://pkg.go.dev/badge/github.com/moorara/observer
 [workflow-url]: https://github.com/moorara/observer/actions
 [workflow-image]: https://github.com/moorara/observer/workflows/Main/badge.svg
 [goreport-url]: https://goreportcard.com/report/github.com/moorara/observer
