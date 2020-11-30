@@ -10,12 +10,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/baggage"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/api/propagation"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 )
@@ -158,7 +157,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	req.Header.Set(clientNameHeader, c.observer.Name())
 
 	// Create a new context
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("req.uuid", requestUUID),
 		label.String("client.name", c.observer.Name()),
 	)
@@ -171,10 +170,10 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	defer span.End()
 
 	// Inject the context and the span context into the http headers
-	propagation.InjectHTTP(ctx, global.Propagators(), req.Header)
+	otel.GetTextMapPropagator().Inject(ctx, req.Header)
 
 	// Make the http call
-	span.AddEvent(ctx, "making http call")
+	span.AddEvent("making http call")
 	resp, err := c.client.Do(req)
 
 	duration := time.Since(startTime).Milliseconds()

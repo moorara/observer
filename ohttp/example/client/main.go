@@ -8,7 +8,7 @@ import (
 
 	"github.com/moorara/observer"
 	"github.com/moorara/observer/ohttp"
-	"go.opentelemetry.io/otel/api/baggage"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/label"
 	"go.uber.org/zap"
 )
@@ -35,7 +35,7 @@ func main() {
 	client := ohttp.NewClient(c, obsv, ohttp.Options{})
 
 	ctx := context.Background()
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("tenant", "1234"),
 	)
 

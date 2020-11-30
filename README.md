@@ -26,7 +26,7 @@ It offers a single unified developer experience for enabling observability.
 ### Logging
 
 Logs are used for _auditing_ purposes (sometimes for debugging with limited capabilities).
-When looking at logs, you need to know what to look for ahead of the time (known unknowns vs. unknown unknowns).
+When looking at logs, you need to know what to look for ahead of time (known unknowns vs. unknown unknowns).
 Since log data can have any arbitrary shape and size, they cannot be used for real-time computational purposes.
 Logs are hard to track across different and distributed processes. Logs are also very expensive at scale.
 
@@ -34,7 +34,7 @@ Logs are hard to track across different and distributed processes. Logs are also
 
 Metrics are _regular time-series_ data with _low and fixed cardinality_.
 They are aggregated by time. Metrics are used for **real-time** monitoring purposes.
-Using metrics with can implement **SLIs** (service-level indicators), **SLOs** (service-level objectives), and automated alerts.
+Using metrics we can implement **SLIs** (service-level indicators), **SLOs** (service-level objectives), and automated alerts.
 Metrics are very good at taking the distribution of data into account.
 Metrics cannot be used with _high-cardinality data_.
 
@@ -68,8 +68,8 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/baggage"
-  "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/baggage"
+  "go.opentelemetry.io/otel/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
 )
@@ -156,7 +156,7 @@ func main() {
 
   // Creating a context
   ctx := context.Background()
-  ctx = baggage.NewContext(ctx,
+  ctx = baggage.ContextWithValues(ctx,
     label.String("tenant", "1234"),
   )
 
@@ -187,7 +187,7 @@ request_duration_seconds_count{endpoint="/user",method="GET",statusCode="200"} 1
 requests_total{endpoint="/user",method="GET",statusCode="200"} 1
 ```
 
-You can also verfiy a trace is reported to Jaeger by visiting http://localhost:16686 .
+You can also verify a trace is reported to Jaeger by visiting http://localhost:16686 .
 </details>
 
 <details>
@@ -201,8 +201,8 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/baggage"
-  "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/baggage"
+  "go.opentelemetry.io/otel/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
 )
@@ -288,7 +288,7 @@ func main() {
 
   // Creating a context
   ctx := context.Background()
-  ctx = baggage.NewContext(ctx,
+  ctx = baggage.ContextWithValues(ctx,
     label.String("tenant", "1234"),
   )
 
@@ -387,10 +387,10 @@ _TBD_
     - [go.uber.org/zap](https://pkg.go.dev/go.uber.org/zap)
   - **Metrics**
     - [Metrics API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/metrics/api.md)
-    - [go.opentelemetry.io/otel/api/metric](https://pkg.go.dev/go.opentelemetry.io/otel/api/metric)
+    - [go.opentelemetry.io/otel/metric](https://pkg.go.dev/go.opentelemetry.io/otel/metric)
   - **Tracing**
     - [Tracing API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md)
-    - [go.opentelemetry.io/otel/api/trace](https://pkg.go.dev/go.opentelemetry.io/otel/api/trace)
+    - [go.opentelemetry.io/otel/trace](https://pkg.go.dev/go.opentelemetry.io/otel/trace)
   - **OpenTelemetry**
     - [Collector Configuration](https://opentelemetry.io/docs/collector/configuration)
     - [Collector Architecture](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/design.md)
