@@ -7,13 +7,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/baggage"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/api/propagation"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -135,7 +134,7 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Create a new context
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("req.uuid", requestUUID),
 		label.String("client.name", i.observer.Name()),
 	)
@@ -148,11 +147,11 @@ func (i *ClientInterceptor) unaryInterceptor(ctx context.Context, fullMethod str
 	defer span.End()
 
 	// Inject the context and the span context into the grpc metadata
-	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
+	otel.GetTextMapPropagator().Inject(ctx, &metadataTextMapCarrier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Call gRPC method invoker
-	span.AddEvent(ctx, "invoking grpc method")
+	span.AddEvent("invoking grpc method")
 	err := invoker(ctx, fullMethod, req, res, cc, opts...)
 
 	duration := time.Since(startTime).Milliseconds()
@@ -271,7 +270,7 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Create a new context
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("req.uuid", requestUUID),
 		label.String("client.name", i.observer.Name()),
 	)
@@ -284,11 +283,11 @@ func (i *ClientInterceptor) streamInterceptor(ctx context.Context, desc *grpc.St
 	defer span.End()
 
 	// Inject the context and the span context into the grpc metadata
-	propagation.InjectHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
+	otel.GetTextMapPropagator().Inject(ctx, &metadataTextMapCarrier{md: &md})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Call gRPC method streamer
-	span.AddEvent(ctx, "invoking grpc method")
+	span.AddEvent("invoking grpc method")
 	cs, err := streamer(ctx, desc, cc, fullMethod, opts...)
 
 	duration := time.Since(startTime).Milliseconds()

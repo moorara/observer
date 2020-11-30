@@ -87,12 +87,12 @@ func ServerStreamWithContext(ctx context.Context, s grpc.ServerStream) grpc.Serv
 	}
 }
 
-// metadataSupplier implements propagation.HTTPSupplier interface.
-type metadataSupplier struct {
+// metadataTextMapCarrier implements propagation.HTTPSupplier interface.
+type metadataTextMapCarrier struct {
 	md *metadata.MD
 }
 
-func (s *metadataSupplier) Get(key string) string {
+func (s *metadataTextMapCarrier) Get(key string) string {
 	values := s.md.Get(key)
 	if len(values) == 0 {
 		return ""
@@ -100,6 +100,6 @@ func (s *metadataSupplier) Get(key string) string {
 	return values[0]
 }
 
-func (s *metadataSupplier) Set(key string, value string) {
+func (s *metadataTextMapCarrier) Set(key string, value string) {
 	s.md.Set(key, value)
 }

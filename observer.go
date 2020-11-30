@@ -19,16 +19,16 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/credentials"
 
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/metric/controller/pull"
 	"go.opentelemetry.io/otel/sdk/metric/controller/push"
 	"go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/semconv"
+	"go.opentelemetry.io/otel/trace"
 
 	promexporter "go.opentelemetry.io/otel/exporters/metric/prometheus"
 	otlpexporter "go.opentelemetry.io/otel/exporters/otlp"
@@ -323,7 +323,7 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	if o.tracer == nil {
-		o.tracer = trace.NoopTracerProvider().Tracer("")
+		o.tracer = trace.NewNoopTracerProvider().Tracer("")
 	}
 
 	// Assign the new observer to the singleton observer
@@ -420,7 +420,7 @@ func initPrometheus(c configs) (metric.Meter, http.Handler) {
 		panic(err)
 	}
 
-	global.SetMeterProvider(exporter.MeterProvider())
+	otel.SetMeterProvider(exporter.MeterProvider())
 	meter := exporter.MeterProvider().Meter(c.name)
 
 	return meter, exporter
@@ -462,8 +462,8 @@ func initJaeger(c configs) (trace.Tracer, endFunc) {
 		panic(err)
 	}
 
-	global.SetTracerProvider(provider)
-	tracer := global.TracerProvider().Tracer(c.name)
+	otel.SetTracerProvider(provider)
+	tracer := otel.Tracer(c.name)
 
 	return tracer, endFuncFromFunc(flush)
 }
@@ -492,11 +492,20 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc)
 		tracesdk.WithConfig(tracesdk.Config{
 			DefaultSampler: tracesdk.AlwaysSample(),
 		}),
-		tracesdk.WithResource(resource.New(
-			semconv.ServiceNameKey.String(c.name),
-		)),
 	}
 
+	r, err := resource.New(
+		context.Background(),
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(c.name),
+		),
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	tpOpts = append(tpOpts, tracesdk.WithResource(r))
 	traceProvider := tracesdk.NewTracerProvider(tpOpts...)
 
 	// Meter Provider
@@ -510,12 +519,12 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc)
 	pusher := push.New(checkpointer, exporter, pushOpts...)
 
 	// Set global providers
-	global.SetTracerProvider(traceProvider)
-	global.SetMeterProvider(pusher.MeterProvider())
+	otel.SetTracerProvider(traceProvider)
+	otel.SetMeterProvider(pusher.MeterProvider())
 	pusher.Start()
 
-	meter := global.MeterProvider().Meter(c.name)
-	tracer := global.TracerProvider().Tracer(c.name)
+	meter := otel.Meter(c.name)
+	tracer := otel.Tracer(c.name)
 
 	return meter, tracer, endFuncFromFunc(pusher.Stop), exporter.Shutdown
 }
@@ -571,7 +580,7 @@ func init() {
 		loggerConfig: &zap.Config{},
 		meter:        new(metric.NoopMeterProvider).Meter(""),
 		promHandler:  http.NotFoundHandler(),
-		tracer:       trace.NoopTracerProvider().Tracer(""),
+		tracer:       trace.NewNoopTracerProvider().Tracer(""),
 	}
 }
 

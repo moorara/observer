@@ -68,8 +68,8 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/baggage"
-  "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/baggage"
+  "go.opentelemetry.io/otel/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
 )
@@ -156,7 +156,7 @@ func main() {
 
   // Creating a context
   ctx := context.Background()
-  ctx = baggage.NewContext(ctx,
+  ctx = baggage.ContextWithValues(ctx,
     label.String("tenant", "1234"),
   )
 
@@ -201,8 +201,8 @@ import (
   "time"
 
   "github.com/moorara/observer"
-  "go.opentelemetry.io/otel/api/baggage"
-  "go.opentelemetry.io/otel/api/metric"
+  "go.opentelemetry.io/otel/baggage"
+  "go.opentelemetry.io/otel/metric"
   "go.opentelemetry.io/otel/label"
   "go.uber.org/zap"
 )
@@ -288,7 +288,7 @@ func main() {
 
   // Creating a context
   ctx := context.Background()
-  ctx = baggage.NewContext(ctx,
+  ctx = baggage.ContextWithValues(ctx,
     label.String("tenant", "1234"),
   )
 
@@ -387,10 +387,10 @@ _TBD_
     - [go.uber.org/zap](https://pkg.go.dev/go.uber.org/zap)
   - **Metrics**
     - [Metrics API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/metrics/api.md)
-    - [go.opentelemetry.io/otel/api/metric](https://pkg.go.dev/go.opentelemetry.io/otel/api/metric)
+    - [go.opentelemetry.io/otel/metric](https://pkg.go.dev/go.opentelemetry.io/otel/metric)
   - **Tracing**
     - [Tracing API](https://github.com/open-telemetry/opentelemetry-specification/blob/master/specification/trace/api.md)
-    - [go.opentelemetry.io/otel/api/trace](https://pkg.go.dev/go.opentelemetry.io/otel/api/trace)
+    - [go.opentelemetry.io/otel/trace](https://pkg.go.dev/go.opentelemetry.io/otel/trace)
   - **OpenTelemetry**
     - [Collector Configuration](https://opentelemetry.io/docs/collector/configuration)
     - [Collector Architecture](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/design.md)

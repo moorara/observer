@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -720,7 +720,7 @@ func TestObserverTracer(t *testing.T) {
 		{
 			name: "OK",
 			observer: &observer{
-				tracer: trace.NoopTracerProvider().Tracer(""),
+				tracer: trace.NewNoopTracerProvider().Tracer(""),
 			},
 		},
 	}

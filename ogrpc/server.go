@@ -7,13 +7,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/moorara/observer"
-	"go.opentelemetry.io/otel/api/baggage"
-	"go.opentelemetry.io/otel/api/global"
-	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/api/propagation"
-	"go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/unit"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -170,18 +169,13 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 	_ = grpc.SendHeader(ctx, header)
 
 	// Extract context from the grpc metadata
-	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
+	ctx = otel.GetTextMapPropagator().Extract(ctx, &metadataTextMapCarrier{md: &md})
 
-	// Get span context and propagated key-values
 	// spanContext := trace.RemoteSpanContextFromContext(ctx)
-	var keyvalues []label.KeyValue
-	baggage.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
-		keyvalues = append(keyvalues, kv)
-		return true
-	})
+	// value := baggage.Value(ctx, label.Key("key"))
 
 	// Create a new context
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("req.uuid", requestUUID),
 	)
 
@@ -213,7 +207,7 @@ func (i *ServerInterceptor) unaryInterceptor(ctx context.Context, req interface{
 	ctx = observer.ContextWithLogger(ctx, logger)
 
 	// Call gRPC method handler
-	span.AddEvent(ctx, "calling grpc method handler")
+	span.AddEvent("calling grpc method handler")
 	res, err := i.callUnaryHandler(handler, ctx, req)
 
 	duration := time.Since(startTime).Milliseconds()
@@ -347,18 +341,13 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	_ = ss.SendHeader(header)
 
 	// Extract context from the grpc metadata
-	ctx = propagation.ExtractHTTP(ctx, global.Propagators(), &metadataSupplier{md: &md})
+	ctx = otel.GetTextMapPropagator().Extract(ctx, &metadataTextMapCarrier{md: &md})
 
-	// Get span context and propagated key-values
 	// spanContext := trace.RemoteSpanContextFromContext(ctx)
-	var keyvalues []label.KeyValue
-	baggage.MapFromContext(ctx).Foreach(func(kv label.KeyValue) bool {
-		keyvalues = append(keyvalues, kv)
-		return true
-	})
+	// value := baggage.Value(ctx, label.Key("key"))
 
 	// Create a new context
-	ctx = baggage.NewContext(ctx,
+	ctx = baggage.ContextWithValues(ctx,
 		label.String("req.uuid", requestUUID),
 	)
 
@@ -391,7 +380,7 @@ func (i *ServerInterceptor) streamInterceptor(srv interface{}, ss grpc.ServerStr
 	ss = ServerStreamWithContext(ctx, ss)
 
 	// Call gRPC method handler
-	span.AddEvent(ctx, "calling grpc method handler")
+	span.AddEvent("calling grpc method handler")
 	err := i.callStreamHandler(handler, srv, ss)
 
 	duration := time.Since(startTime).Milliseconds()
