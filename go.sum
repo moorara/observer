@@ -377,8 +377,7 @@ go.opentelemetry.io/otel/exporters/metric/prometheus v0.14.0 h1:F0hQ6ktEf49bJtEc
 go.opentelemetry.io/otel/exporters/metric/prometheus v0.14.0/go.mod h1:1YFGCWmDN9G7Wz/wTOqEU1+nrfLjc1F1hxIjtdGwjmA=
 go.opentelemetry.io/otel/exporters/otlp v0.14.0 h1:B5uCGwaThlJMVpCeOxRkiVeOhT2t0GcZp8G+x219W5k=
 go.opentelemetry.io/otel/exporters/otlp v0.14.0/go.mod h1:DmFebmd697PT2nIQ6t6p1tx9KQFu+R2PGd+3W62OkAE=
-go.opentelemetry.io/otel/exporters/trace/jaeger v0.14.0 h1:bZBrD38x5mIcgJfX7pb9IstnOYCyOwjst1zwozk05Yo=
-go.opentelemetry.io/otel/exporters/trace/jaeger v0.14.0/go.mod h1:UnksyFj1mLMRzy64G8Is+joarp8tUHIxJlQQJ4PHVgI=
+go.opentelemetry.io/otel/exporters/trace/jaeger v0.15.0/go.mod h1:4DeFMzRzr2l5o/Lzh4GfOYEH+mnf7ZrEGDzzJEP6ta8=
 go.opentelemetry.io/otel/sdk v0.14.0 h1:Pqgd85y5XhyvHQlOxkKW+FD4DAX7AoeaNIDKC2VhfHQ=
 go.opentelemetry.io/otel/sdk v0.14.0/go.mod h1:kGO5pEMSNqSJppHAm8b73zztLxB5fgDQnD56/dl5xqE=
 go.opentelemetry.io/otel/sdk v0.15.0 h1:Hf2dl1Ad9Hn03qjcAuAq51GP5Pv1SV5puIkS2nRhdd8=
