@@ -29,7 +29,7 @@ func newMockObserver() *mockObserver {
 	}
 }
 
-func (m *mockObserver) End(ctx context.Context) error {
+func (m *mockObserver) Shutdown(ctx context.Context) error {
 	return nil
 }
 

@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/label"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric/controller/pull"
 	"go.opentelemetry.io/otel/sdk/metric/controller/push"
 	"go.opentelemetry.io/otel/sdk/metric/processor/basic"
@@ -36,42 +37,7 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
 
-type closeFunc func() error
-
-type endFunc func(context.Context) error
-
-func endFuncFromFunc(fn func()) endFunc {
-	return func(ctx context.Context) error {
-		done := make(chan struct{}, 1)
-		go func() {
-			fn()
-			done <- struct{}{}
-		}()
-
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
-
-func endFuncFromCloseFunc(close closeFunc) endFunc {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() {
-			done <- close()
-		}()
-
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-}
+type shutdownFunc func(context.Context) error
 
 // configs is used for configuring and creating an observer.
 type configs struct {
@@ -232,8 +198,8 @@ func WithOpenTelemetry(collectorAddress string, collectorCredentials credentials
 
 // Observer provides logging, metrics, and tracing capabilities for observability.
 type Observer interface {
-	// End flushes and closes the logger, meter, and tracer.
-	End(context.Context) error
+	// Shutdown flushes and closes the logger, meter, and tracer.
+	Shutdown(context.Context) error
 
 	// Name is returns the name of the observer.
 	Name() string
@@ -258,13 +224,13 @@ type Observer interface {
 }
 
 type observer struct {
-	name         string
-	logger       *zap.Logger
-	loggerConfig *zap.Config
-	meter        metric.Meter
-	promHandler  http.Handler
-	tracer       trace.Tracer
-	endFuncs     []endFunc
+	name          string
+	logger        *zap.Logger
+	loggerConfig  *zap.Config
+	meter         metric.Meter
+	promHandler   http.Handler
+	tracer        trace.Tracer
+	shutdownFuncs []shutdownFunc
 }
 
 // New creates a new observer.
@@ -277,15 +243,13 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	o := &observer{
-		name:     c.name,
-		endFuncs: []endFunc{},
+		name: c.name,
 	}
 
 	if c.loggerEnabled {
-		o.logger, o.loggerConfig = initLogger(c)
-		o.endFuncs = append(o.endFuncs,
-			endFuncFromCloseFunc(o.logger.Sync),
-		)
+		var shutdown shutdownFunc
+		o.logger, o.loggerConfig, shutdown = initLogger(c)
+		o.shutdownFuncs = append(o.shutdownFuncs, shutdown)
 	}
 
 	if c.prometheusEnabled {
@@ -293,15 +257,15 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	}
 
 	if c.jaegerEnabled {
-		var tracerEnd endFunc
-		o.tracer, tracerEnd = initJaeger(c)
-		o.endFuncs = append(o.endFuncs, tracerEnd)
+		var shutdown shutdownFunc
+		o.tracer, shutdown = initJaeger(c)
+		o.shutdownFuncs = append(o.shutdownFuncs, shutdown)
 	}
 
 	if c.opentelemetryEnabled {
-		var meterEnd, tracerEnd endFunc
-		o.meter, o.tracer, meterEnd, tracerEnd = initOpenTelemetry(c)
-		o.endFuncs = append(o.endFuncs, meterEnd, tracerEnd)
+		var shutdown shutdownFunc
+		o.meter, o.tracer, shutdown = initOpenTelemetry(c)
+		o.shutdownFuncs = append(o.shutdownFuncs, shutdown)
 	}
 
 	// Create noop logger, meter, and/or tracer if they are not created so far
@@ -334,7 +298,7 @@ func New(setAsSingleton bool, opts ...Option) Observer {
 	return o
 }
 
-func initLogger(c configs) (*zap.Logger, *zap.Config) {
+func initLogger(c configs) (*zap.Logger, *zap.Config, shutdownFunc) {
 	config := zap.Config{
 		Level:       zap.NewAtomicLevelAt(zapcore.InfoLevel),
 		Development: false,
@@ -398,7 +362,11 @@ func initLogger(c configs) (*zap.Logger, *zap.Config) {
 		zap.AddCallerSkip(0),
 	)
 
-	return logger, &config
+	shutdown := func(context.Context) error {
+		return logger.Sync()
+	}
+
+	return logger, &config, shutdown
 }
 
 func initPrometheus(c configs) (metric.Meter, http.Handler) {
@@ -426,7 +394,7 @@ func initPrometheus(c configs) (metric.Meter, http.Handler) {
 	return meter, exporter
 }
 
-func initJaeger(c configs) (trace.Tracer, endFunc) {
+func initJaeger(c configs) (trace.Tracer, shutdownFunc) {
 	var endpointOpt jaegerexporter.EndpointOption
 	switch {
 	case c.jaegerAgentEndpoint != "":
@@ -465,37 +433,37 @@ func initJaeger(c configs) (trace.Tracer, endFunc) {
 	otel.SetTracerProvider(provider)
 	tracer := otel.Tracer(c.name)
 
-	return tracer, endFuncFromFunc(flush)
+	shutdown := func(context.Context) error {
+		flush()
+		return nil
+	}
+
+	return tracer, shutdown
 }
 
-func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc) {
-	// Exporter
+func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, shutdownFunc) {
+	ctx := context.Background()
+
+	// ====================> Exporter <====================
 
 	expOpts := []otlpexporter.ExporterOption{
 		otlpexporter.WithAddress(c.opentelemetryCollectorAddress),
 	}
+
 	if c.opentelemetryCollectorCredentials == nil {
 		expOpts = append(expOpts, otlpexporter.WithInsecure())
 	} else {
 		expOpts = append(expOpts, otlpexporter.WithTLSCredentials(c.opentelemetryCollectorCredentials))
 	}
 
-	exporter, err := otlpexporter.NewExporter(expOpts...)
+	exporter, err := otlpexporter.NewExporter(ctx, expOpts...)
 	if err != nil {
 		panic(err)
 	}
 
-	// Trace Provider
+	// ====================> Trace Provider <====================
 
-	tpOpts := []tracesdk.TracerProviderOption{
-		tracesdk.WithBatcher(exporter),
-		tracesdk.WithConfig(tracesdk.Config{
-			DefaultSampler: tracesdk.AlwaysSample(),
-		}),
-	}
-
-	r, err := resource.New(
-		context.Background(),
+	r, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(c.name),
 		),
@@ -505,10 +473,19 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc)
 		panic(err)
 	}
 
-	tpOpts = append(tpOpts, tracesdk.WithResource(r))
+	tpOpts := []tracesdk.TracerProviderOption{
+		tracesdk.WithResource(r),
+		tracesdk.WithConfig(tracesdk.Config{
+			DefaultSampler: tracesdk.AlwaysSample(),
+		}),
+		tracesdk.WithSpanProcessor(
+			tracesdk.NewBatchSpanProcessor(exporter),
+		),
+	}
+
 	traceProvider := tracesdk.NewTracerProvider(tpOpts...)
 
-	// Meter Provider
+	// ====================> Meter Provider <====================
 
 	aggregator := simple.NewWithExactDistribution()
 	checkpointer := basic.New(aggregator, exporter)
@@ -518,20 +495,34 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, endFunc, endFunc)
 
 	pusher := push.New(checkpointer, exporter, pushOpts...)
 
-	// Set global providers
+	// ====================> Set Globals <====================
+
 	otel.SetTracerProvider(traceProvider)
 	otel.SetMeterProvider(pusher.MeterProvider())
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	pusher.Start()
 
 	meter := otel.Meter(c.name)
 	tracer := otel.Tracer(c.name)
 
-	return meter, tracer, endFuncFromFunc(pusher.Stop), exporter.Shutdown
+	shutdown := func(ctx context.Context) error {
+		if err := traceProvider.Shutdown(ctx); err != nil {
+			return err
+		}
+		if err := exporter.Shutdown(ctx); err != nil {
+			return err
+		}
+		// FIXME:
+		// pusher.Stop()
+		return nil
+	}
+
+	return meter, tracer, shutdown
 }
 
-func (o *observer) End(ctx context.Context) error {
+func (o *observer) Shutdown(ctx context.Context) error {
 	var err error
-	for _, endFunc := range o.endFuncs {
+	for _, endFunc := range o.shutdownFuncs {
 		if e := endFunc(ctx); e != nil {
 			err = multierror.Append(err, e)
 		}

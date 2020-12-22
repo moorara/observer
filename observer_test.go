@@ -15,80 +15,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func TestNewEndFuncFromFunc(t *testing.T) {
-	cancelledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	tests := []struct {
-		name          string
-		fn            func()
-		ctx           context.Context
-		expectedError string
-	}{
-		{
-			name:          "Successful",
-			fn:            func() {},
-			ctx:           context.Background(),
-			expectedError: "",
-		},
-		{
-			name:          "ContextCancelled",
-			fn:            func() {},
-			ctx:           cancelledCtx,
-			expectedError: "context canceled",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(T *testing.T) {
-			err := endFuncFromFunc(tc.fn)(tc.ctx)
-
-			if tc.expectedError == "" {
-				assert.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, tc.expectedError)
-			}
-		})
-	}
-}
-
-func TestNewEndFuncFromCloseFunc(t *testing.T) {
-	cancelledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	tests := []struct {
-		name          string
-		close         closeFunc
-		ctx           context.Context
-		expectedError string
-	}{
-		{
-			name:          "Successful",
-			close:         func() error { return nil },
-			ctx:           context.Background(),
-			expectedError: "",
-		},
-		{
-			name:          "ContextCancelled",
-			close:         func() error { return nil },
-			ctx:           cancelledCtx,
-			expectedError: "context canceled",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(T *testing.T) {
-			err := endFuncFromCloseFunc(tc.close)(tc.ctx)
-
-			if tc.expectedError == "" {
-				assert.NoError(t, err)
-			} else {
-				assert.EqualError(t, err, tc.expectedError)
-			}
-		})
-	}
-}
-
 func TestConfigsFromEnv(t *testing.T) {
 	type keyval struct {
 		name  string
@@ -314,6 +240,7 @@ func TestNew(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(T *testing.T) {
 			observer := New(tc.setAsSingleton, tc.opts...)
+			defer observer.Shutdown(context.Background())
 
 			assert.NotNil(t, observer)
 			assert.NotNil(t, observer.Logger())
@@ -396,10 +323,11 @@ func TestInitLogger(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(T *testing.T) {
-			logger, config := initLogger(tc.configs)
+			logger, config, shutdown := initLogger(tc.configs)
 
 			assert.NotNil(t, logger)
 			assert.NotNil(t, config)
+			assert.NotNil(t, shutdown)
 			assert.Equal(t, tc.expectedLevel, config.Level.Level())
 		})
 	}
@@ -462,11 +390,11 @@ func TestInitJaeger(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tracer, tracerEnd := initJaeger(tc.configs)
-			defer tracerEnd(context.Background())
+			tracer, shutdown := initJaeger(tc.configs)
+			defer shutdown(context.Background())
 
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, tracerEnd)
+			assert.NotNil(t, shutdown)
 		})
 	}
 }
@@ -488,19 +416,17 @@ func TestInitOpenTelemetry(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			meter, tracer, meterEnd, tracerEnd := initOpenTelemetry(tc.configs)
-			defer meterEnd(context.Background())
-			defer tracerEnd(context.Background())
+			meter, tracer, shutdown := initOpenTelemetry(tc.configs)
+			defer shutdown(context.Background())
 
 			assert.NotNil(t, meter)
 			assert.NotNil(t, tracer)
-			assert.NotNil(t, meterEnd)
-			assert.NotNil(t, tracerEnd)
+			assert.NotNil(t, shutdown)
 		})
 	}
 }
 
-func TestObserverEnd(t *testing.T) {
+func TestObserverShutdown(t *testing.T) {
 	tests := []struct {
 		name          string
 		observer      *observer
@@ -510,7 +436,7 @@ func TestObserverEnd(t *testing.T) {
 		{
 			name: "Success",
 			observer: &observer{
-				endFuncs: []endFunc{
+				shutdownFuncs: []shutdownFunc{
 					func(context.Context) error {
 						return nil
 					},
@@ -522,7 +448,7 @@ func TestObserverEnd(t *testing.T) {
 		{
 			name: "Fail",
 			observer: &observer{
-				endFuncs: []endFunc{
+				shutdownFuncs: []shutdownFunc{
 					func(context.Context) error {
 						return errors.New("error on closing")
 					},
@@ -535,7 +461,7 @@ func TestObserverEnd(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.observer.End(tc.ctx)
+			err := tc.observer.Shutdown(tc.ctx)
 
 			if tc.expectedError == "" {
 				assert.NoError(t, err)

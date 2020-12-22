@@ -30,7 +30,7 @@ func main() {
 		observer.WithPrometheus(),
 		observer.WithJaeger("localhost:6831", "", "", ""),
 	)
-	defer obsv.End(context.Background())
+	defer obsv.Shutdown(context.Background())
 
 	si := ogrpc.NewServerInterceptor(obsv, ogrpc.Options{})
 
