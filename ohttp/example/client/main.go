@@ -25,7 +25,7 @@ func main() {
 		observer.WithPrometheus(),
 		observer.WithJaeger("localhost:6831", "", "", ""),
 	)
-	defer obsv.End(context.Background())
+	defer obsv.Shutdown(context.Background())
 
 	c := &http.Client{
 		Timeout:   10 * time.Second,
