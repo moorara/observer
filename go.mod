@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.1.4
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/prometheus/client_golang v1.9.0
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	go.opentelemetry.io/otel v0.15.0
 	go.opentelemetry.io/otel/exporters/metric/prometheus v0.15.0
 	go.opentelemetry.io/otel/exporters/otlp v0.15.0
