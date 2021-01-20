@@ -20,20 +20,20 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
 	"go.opentelemetry.io/otel/label"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/metric/controller/pull"
-	"go.opentelemetry.io/otel/sdk/metric/controller/push"
-	"go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	"go.opentelemetry.io/otel/sdk/metric/selector/simple"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/semconv"
 	"go.opentelemetry.io/otel/trace"
 
 	promexporter "go.opentelemetry.io/otel/exporters/metric/prometheus"
-	otlpexporter "go.opentelemetry.io/otel/exporters/otlp"
 	jaegerexporter "go.opentelemetry.io/otel/exporters/trace/jaeger"
+	controller "go.opentelemetry.io/otel/sdk/metric/controller/basic"
+	processor "go.opentelemetry.io/otel/sdk/metric/processor/basic"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -382,8 +382,7 @@ func initPrometheus(c configs) (metric.Meter, http.Handler) {
 		// DefaultHistogramBoundaries: []float64{},
 	}
 
-	pullOpts := []pull.Option{}
-	exporter, err := promexporter.NewExportPipeline(config, pullOpts...)
+	exporter, err := promexporter.NewExportPipeline(config)
 	if err != nil {
 		panic(err)
 	}
@@ -446,17 +445,18 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, shutdownFunc) {
 
 	// ====================> Exporter <====================
 
-	expOpts := []otlpexporter.ExporterOption{
-		otlpexporter.WithAddress(c.opentelemetryCollectorAddress),
+	driverOpts := []otlpgrpc.Option{
+		otlpgrpc.WithEndpoint(c.opentelemetryCollectorAddress),
 	}
 
 	if c.opentelemetryCollectorCredentials == nil {
-		expOpts = append(expOpts, otlpexporter.WithInsecure())
+		driverOpts = append(driverOpts, otlpgrpc.WithInsecure())
 	} else {
-		expOpts = append(expOpts, otlpexporter.WithTLSCredentials(c.opentelemetryCollectorCredentials))
+		driverOpts = append(driverOpts, otlpgrpc.WithTLSCredentials(c.opentelemetryCollectorCredentials))
 	}
 
-	exporter, err := otlpexporter.NewExporter(ctx, expOpts...)
+	driver := otlpgrpc.NewDriver(driverOpts...)
+	exporter, err := otlp.NewExporter(ctx, driver)
 	if err != nil {
 		panic(err)
 	}
@@ -473,7 +473,7 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, shutdownFunc) {
 		panic(err)
 	}
 
-	tpOpts := []tracesdk.TracerProviderOption{
+	traceProvider := tracesdk.NewTracerProvider(
 		tracesdk.WithResource(r),
 		tracesdk.WithConfig(tracesdk.Config{
 			DefaultSampler: tracesdk.AlwaysSample(),
@@ -481,26 +481,27 @@ func initOpenTelemetry(c configs) (metric.Meter, trace.Tracer, shutdownFunc) {
 		tracesdk.WithSpanProcessor(
 			tracesdk.NewBatchSpanProcessor(exporter),
 		),
-	}
-
-	traceProvider := tracesdk.NewTracerProvider(tpOpts...)
+	)
 
 	// ====================> Meter Provider <====================
 
 	aggregator := simple.NewWithExactDistribution()
-	checkpointer := basic.New(aggregator, exporter)
-	pushOpts := []push.Option{
-		push.WithPeriod(2 * time.Second),
-	}
+	checkpointer := processor.New(aggregator, exporter)
 
-	pusher := push.New(checkpointer, exporter, pushOpts...)
+	cont := controller.New(checkpointer,
+		controller.WithPusher(exporter),
+		controller.WithCollectPeriod(2*time.Second),
+	)
 
 	// ====================> Set Globals <====================
 
 	otel.SetTracerProvider(traceProvider)
-	otel.SetMeterProvider(pusher.MeterProvider())
+	otel.SetMeterProvider(cont.MeterProvider())
 	otel.SetTextMapPropagator(propagation.TraceContext{})
-	pusher.Start()
+
+	if err := cont.Start(ctx); err != nil {
+		panic(err)
+	}
 
 	meter := otel.Meter(c.name)
 	tracer := otel.Tracer(c.name)
