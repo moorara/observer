@@ -1,10 +1,14 @@
+# ARCHIVED
+
+Moved to https://github.com/moorara/acai/tree/main/observer
+
+# observer
+
 [![Go Doc][godoc-image]][godoc-url]
 [![Build Status][workflow-image]][workflow-url]
 [![Go Report Card][goreport-image]][goreport-url]
 [![Test Coverage][coverage-image]][coverage-url]
 [![Maintainability][maintainability-image]][maintainability-url]
-
-# observer
 
 This package can be used for building observable applications in Go.
 It aims to unify three pillars of observability in one single package that is _easy-to-use_ and _hard-to-misuse_.
